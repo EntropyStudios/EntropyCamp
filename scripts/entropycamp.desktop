@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=EntropyCamp 星营
+Comment=开机在 Zen 打开 EntropyCamp
+Exec=/home/li/.local/bin/open-entropycamp-page --claim-source
+Terminal=false
+X-GNOME-Autostart-enabled=true

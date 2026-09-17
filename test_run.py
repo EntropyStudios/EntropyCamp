@@ -46,6 +46,21 @@ class StaticFileSecurityTests(unittest.TestCase):
                     worker.join(timeout=2)
 
 
+class LauncherTests(unittest.TestCase):
+    def test_launcher_prefers_zen_and_legacy_command_redirects(self):
+        root = Path(__file__).parent
+        launcher = (root / "scripts/open-entropycamp-page").read_text()
+        legacy = (root / "scripts/codex-reminder-cards").read_text()
+        desktop = (root / "scripts/entropycamp.desktop").read_text()
+        self.assertIn("start entropycamp.service", launcher)
+        self.assertLess(launcher.index('exec "$HOME/.local/bin/zen"'), launcher.index("exec xdg-open"))
+        self.assertNotIn("codex-reminder-cards.service", legacy)
+        self.assertIn("open-entropycamp-page", legacy)
+        self.assertIn("--claim-source", desktop)
+        for name in ("open-entropycamp-page", "codex-reminder-cards", "install-launchers.sh"):
+            subprocess.run(["sh", "-n", str(root / "scripts" / name)], check=True)
+
+
 class FeishuNotifierTests(unittest.TestCase):
     def test_signature_matches_feishu_hmac_contract(self):
         timestamp = 1599360473
