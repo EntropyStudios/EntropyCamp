@@ -1,0 +1,19 @@
+#!/usr/bin/env sh
+set -eu
+
+systemctl --user start entropycamp.service
+url="http://127.0.0.1:8765/?variant=A"
+if [ "${1:-}" = "--claim-source" ]; then
+  url="$url&widgetSource=claim"
+fi
+for _ in $(seq 1 60); do
+  if curl -fsS --max-time 1 "$url" >/dev/null 2>&1; then
+    if [ -x "$HOME/.local/bin/zen" ]; then
+      exec "$HOME/.local/bin/zen" "$url"
+    fi
+    exec xdg-open "$url"
+  fi
+  sleep 1
+done
+notify-send "EntropyCamp" "服务尚未就绪，请检查 entropycamp.service 日志" 2>/dev/null || true
+exit 1

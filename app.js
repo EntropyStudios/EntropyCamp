@@ -1,3 +1,6 @@
+(async function initializeReminderApp() {
+await window.EntropyState.ready;
+const businessState = window.EntropyState;
 const STORAGE_KEY = "lumen-reminder-cards-v1";
 const WORK_SESSION_KEY = "lumen-reminder-work-session-v1";
 const WORK_HISTORY_KEY = "lumen-reminder-work-history-v1";
@@ -26,6 +29,8 @@ let workSessionBusy = false;
 let workReflectionReturnFocus = null;
 let workReflectionPreview = false;
 let workReflectionConversationOptions = [];
+let editingCardsBase;
+let reflectionStartedFor;
 
 const CODEX_FALLBACK_SYNC_MS = 60 * 1000;
 const WIDGET_SNAPSHOT_SYNC_MS = 30 * 1000;
@@ -367,7 +372,7 @@ const corpusPalletElements = {
 
 function loadCards() {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    const saved = JSON.parse(businessState.getItem(STORAGE_KEY) || "[]");
     return Array.isArray(saved)
       ? saved
           .filter((card) => card && typeof card.id === "string" && Number.isFinite(card.intervalMs))
@@ -401,8 +406,8 @@ function loadCards() {
   }
 }
 
-function saveCards() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+function saveCards(base) {
+  return businessState.setItems({ [STORAGE_KEY]: JSON.stringify(cards), [WORK_SESSION_KEY]: JSON.stringify(workSession) }, base === undefined ? {} : { [STORAGE_KEY]: base });
 }
 
 function emptyWorkSession() {
@@ -417,7 +422,7 @@ function emptyWorkSession() {
 
 function loadWorkSession() {
   try {
-    const saved = JSON.parse(localStorage.getItem(WORK_SESSION_KEY) || "{}");
+    const saved = JSON.parse(businessState.getItem(WORK_SESSION_KEY) || "{}");
     if (!saved || typeof saved !== "object") return emptyWorkSession();
     const countsByCardId = {};
     Object.entries(saved.countsByCardId || {}).forEach(([cardId, count]) => {
@@ -444,12 +449,12 @@ function loadWorkSession() {
 }
 
 function saveWorkSession() {
-  localStorage.setItem(WORK_SESSION_KEY, JSON.stringify(workSession));
+  return saveCards();
 }
 
 function loadWorkHistory(rawValue) {
   try {
-    const raw = rawValue === undefined ? localStorage.getItem(WORK_HISTORY_KEY) : rawValue;
+    const raw = rawValue === undefined ? businessState.getItem(WORK_HISTORY_KEY) : rawValue;
     return workHistoryCore.normalizeStore(raw);
   } catch {
     return {
@@ -461,7 +466,7 @@ function loadWorkHistory(rawValue) {
   }
 }
 
-function persistWorkHistoryEntry(entry) {
+async function persistWorkHistoryEntry(entry, finalSession, finalCards) {
   const latest = loadWorkHistory();
   if (latest.incompatible) {
     workReflectionStatus.textContent = "历史数据来自更新版本，当前页面不能安全写入";
@@ -475,11 +480,14 @@ function persistWorkHistoryEntry(entry) {
     entries,
   };
   try {
-    localStorage.setItem(WORK_HISTORY_KEY, JSON.stringify(payload));
-    workHistoryStore = workHistoryCore.normalizeStore(payload);
+    const values = { [WORK_HISTORY_KEY]: JSON.stringify(payload) };
+    if (finalSession) values[WORK_SESSION_KEY] = JSON.stringify(finalSession);
+    if (finalCards) values[STORAGE_KEY] = JSON.stringify(finalCards);
+    if (!await businessState.setItems(values)) return false;
+    workHistoryStore = loadWorkHistory();
     return true;
   } catch {
-    workReflectionStatus.textContent = "历史记录保存失败，请检查浏览器本地存储空间";
+    workReflectionStatus.textContent = "历史记录保存失败，请检查本地数据库服务";
     return false;
   }
 }
@@ -3773,6 +3781,7 @@ function updateWorkReflectionSummary(now = Date.now()) {
 }
 
 function openWorkReflectionDialog({ preview = false } = {}) {
+  reflectionStartedFor = workSession.startedAt;
   if (!workReflectionDialog || (!workSession.active && !preview)) return;
   workReflectionPreview = preview;
   workReflectionReturnFocus = document.activeElement;
@@ -4395,6 +4404,7 @@ function updateClocks() {
 }
 
 function openNewDialog() {
+  editingCardsBase = businessState.getItem(STORAGE_KEY);
   form.reset();
   document.querySelector("#cardId").value = "";
   document.querySelector("#repeatValue").value = "30";
@@ -4409,6 +4419,7 @@ function openNewDialog() {
 }
 
 function openEditDialog(id) {
+  editingCardsBase = businessState.getItem(STORAGE_KEY);
   const card = cards.find((item) => item.id === id);
   if (!card) return;
   document.querySelector("#cardId").value = card.id;
@@ -4428,12 +4439,16 @@ function closeDialog() {
   dialog.close();
 }
 
-function saveCard(event) {
+async function saveCard(event) {
   event.preventDefault();
   if (!form.reportValidity()) return;
 
   const id = document.querySelector("#cardId").value;
   const existing = cards.find((item) => item.id === id);
+  if (id && !existing) {
+    businessState.fail(new Error("该卡片已在另一个页面删除"));
+    return;
+  }
   const intervalValue = Number(document.querySelector("#repeatValue").value);
   const intervalUnit = document.querySelector("#repeatUnit").value;
   const selectedRef = document.querySelector("#codexThread").value;
@@ -4473,42 +4488,38 @@ function saveCard(event) {
   if (existing) Object.assign(existing, card);
   else cards.push(card);
 
-  saveCards();
+  if (!await saveCards(editingCardsBase)) return;
   closeDialog();
   render();
   refreshCodexEventStream();
   syncCodexCards();
 }
 
-function deleteCard() {
+async function deleteCard() {
   const id = document.querySelector("#cardId").value;
   const card = cards.find((item) => item.id === id);
   if (!card || !confirm(`删除“${card.title}”吗？`)) return;
   cards = cards.filter((item) => item.id !== id);
-  saveCards();
+  if (!await saveCards()) return;
   closeDialog();
   render();
   refreshCodexEventStream();
 }
 
-function acknowledgeCard(id) {
+async function acknowledgeCard(id) {
   const card = cards.find((item) => item.id === id);
   if (!card || getCardState(card) !== "due") return;
   const readSource = card.codexThreadId
     ? card.codexLatestTurnId || card.codexLastSeenTurnId || Date.now()
     : card.nextAt || Date.now();
-  enqueueFeishuEvent("card_read", `read:${card.id}:${readSource}`, {
-    cardTitle: card.title,
-  });
   if (card.codexThreadId) {
     card.codexDue = false;
     card.codexLastSeenTurnId = card.codexLatestTurnId || card.codexLastSeenTurnId;
-    saveCards();
-    render();
-    return;
+  } else {
+    Object.assign(card, startTimer(card));
   }
-  Object.assign(card, startTimer(card));
-  saveCards();
+  if (!await saveCards()) return;
+  enqueueFeishuEvent("card_read", `read:${card.id}:${readSource}`, { cardTitle: card.title });
   render();
 }
 
@@ -4538,7 +4549,7 @@ function updateReminderMode() {
   document.querySelector("#repeatValue").required = !linked;
 }
 
-function applyCodexThreadNames(threads = []) {
+async function applyCodexThreadNames(threads = []) {
   const names = new Map(threads.map((thread) => [codexThreadRef(thread.hostId, thread.id), thread.name]));
   let changed = false;
   cards.forEach((card) => {
@@ -4550,7 +4561,7 @@ function applyCodexThreadNames(threads = []) {
     }
   });
   if (changed) {
-    saveCards();
+    if (!await saveCards()) return;
     render();
   }
 }
@@ -4563,7 +4574,7 @@ async function loadCodexThreads() {
     if (!response.ok || !data.available) throw new Error(data.error || "无法读取 Codex 对话");
     codexThreads = data.threads || [];
     codexAvailable = true;
-    applyCodexThreadNames(codexThreads);
+    await applyCodexThreadNames(codexThreads);
     status.textContent = codexThreads.length ? `最近 ${codexThreads.length} 个对话` : "没有找到对话";
   } catch {
     codexThreads = [];
@@ -4576,7 +4587,7 @@ async function loadCodexThreads() {
   syncCodexCards();
 }
 
-function applyCodexStatuses(threadStatuses = [], options = {}) {
+async function applyCodexStatuses(threadStatuses = [], options = {}) {
   const countCompletions = options.countCompletions !== false;
   const markDue = options.markDue !== false && workSession.active;
   const renderAfter = options.renderAfter !== false;
@@ -4585,6 +4596,7 @@ function applyCodexStatuses(threadStatuses = [], options = {}) {
   const statuses = new Map(threadStatuses.map((thread) => [codexThreadRef(thread.hostId, thread.id), thread]));
   let changed = false;
   let workChanged = false;
+  const notifications = [];
   linkedCards.forEach((card) => {
     const thread = statuses.get(cardCodexThreadRef(card));
     if (!thread) return;
@@ -4658,20 +4670,20 @@ function applyCodexStatuses(threadStatuses = [], options = {}) {
       if (countCompletions && recordWorkCompletion(card, latestTurnId)) {
         changed = true;
         workChanged = true;
-        enqueueFeishuEvent("codex_completed", `codex:${cardCodexThreadRef(card)}:${latestTurnId}`, {
+        notifications.push(["codex_completed", `codex:${cardCodexThreadRef(card)}:${latestTurnId}`, {
           cardTitle: card.title,
           threadName: card.codexThreadName || thread.name || "Codex 对话",
           completionCount: totalWorkCount(),
-        });
+        }]);
       }
       if (!card.codexDue || card.codexLatestTurnId !== latestTurnId) changed = true;
       card.codexDue = true;
       card.codexLatestTurnId = latestTurnId;
     }
   });
-  if (workChanged) saveWorkSession();
-  if (changed) {
-    saveCards();
+  if (changed || workChanged) {
+    if (!await saveCards()) return;
+    notifications.forEach((event) => enqueueFeishuEvent(...event));
     if (renderAfter) render();
   }
 }
@@ -4709,10 +4721,10 @@ function refreshCodexEventStream() {
   threadIds.forEach((id) => query.append("id", id));
   const eventSource = new EventSource(`/api/codex/events?${query}`);
   codexEventSource = eventSource;
-  eventSource.onmessage = (event) => {
+  eventSource.onmessage = async (event) => {
     try {
       const data = JSON.parse(event.data);
-      if (data.available) applyCodexStatuses(data.threads || []);
+      if (data.available) await applyCodexStatuses(data.threads || []);
     } catch {
       // A malformed event is ignored; the fallback sync will reconcile state.
     }
@@ -4740,7 +4752,7 @@ async function syncCodexCards() {
   if (!linkedCards.length || codexSyncing) return;
   codexSyncing = true;
   try {
-    applyCodexStatuses(await fetchCodexStatusesForCards(linkedCards), {
+    await applyCodexStatuses(await fetchCodexStatusesForCards(linkedCards), {
       countCompletions: workSession.active,
       markDue: workSession.active,
     });
@@ -4753,7 +4765,7 @@ async function syncCodexCards() {
       }
     });
     if (changed) {
-      saveCards();
+      await saveCards();
       render();
     }
   } finally {
@@ -4772,12 +4784,16 @@ async function startWorkSession() {
     active: true,
     startedAt: Date.now(),
   };
-  saveWorkSession();
+  if (!await saveWorkSession()) {
+    workSessionBusy = false;
+    renderWorkSession();
+    return;
+  }
   renderWorkSession();
 
   try {
     const statuses = await fetchCodexStatusesForCards(linkedCards);
-    applyCodexStatuses(statuses, {
+    await applyCodexStatuses(statuses, {
       countCompletions: false,
       markDue: false,
       renderAfter: false,
@@ -4786,7 +4802,7 @@ async function startWorkSession() {
     // If Codex is temporarily unavailable, use the last local snapshot as the baseline.
   }
 
-  linkedCards.forEach((card) => {
+  cards.filter((card) => card.codexThreadId).forEach((card) => {
     card.codexDue = false;
     if (card.codexLatestTurnId) {
       card.codexArmed = true;
@@ -4796,8 +4812,7 @@ async function startWorkSession() {
   });
 
   workSessionBusy = false;
-  saveCards();
-  saveWorkSession();
+  if (!await saveCards()) return;
   render();
   refreshCodexEventStream();
   syncCodexCards();
@@ -4805,23 +4820,9 @@ async function startWorkSession() {
 }
 
 function endWorkSession(endedAt = Date.now()) {
-  if (workSessionBusy) return false;
-  workSessionBusy = true;
-  workSession = {
-    ...workSession,
-    active: false,
-    endedAt,
-  };
-  cards.forEach((card) => {
-    if (!card.codexThreadId) return;
-    card.codexDue = false;
-    if (card.codexLatestTurnId) card.codexLastSeenTurnId = card.codexLatestTurnId;
-  });
   codexEventSource?.close();
   codexEventSource = null;
   codexEventKey = "";
-  saveCards();
-  saveWorkSession();
   workSessionBusy = false;
   render();
   return true;
@@ -4839,6 +4840,10 @@ async function saveWorkReflection(event) {
     return;
   }
   if (!workSession.active || workSessionBusy) return;
+  if (workSession.startedAt !== reflectionStartedFor) {
+    workReflectionStatus.textContent = "班次已在另一页面改变，请关闭此窗口后重新确认";
+    return;
+  }
   const endedAt = Date.now();
   const mood = workReflectionForm.elements.workMood.value || "";
   const entry = workHistoryCore.createEntry({
@@ -4852,8 +4857,15 @@ async function saveWorkReflection(event) {
     note: workReflectionNote.value,
   });
   confirmWorkReflection.disabled = true;
+  workSessionBusy = true;
   workReflectionStatus.textContent = "";
-  if (!persistWorkHistoryEntry(entry)) {
+  const finalSession = { ...workSession, active: false, endedAt };
+  const finalCards = cards.map((card) => card.codexThreadId
+    ? { ...card, codexDue: false, codexLastSeenTurnId: card.codexLatestTurnId || card.codexLastSeenTurnId }
+    : card);
+  if (!await persistWorkHistoryEntry(entry, finalSession, finalCards)) {
+    workSessionBusy = false;
+    workReflectionStatus.textContent = "保存失败，本班尚未下班，请重试";
     confirmWorkReflection.disabled = false;
     return;
   }
@@ -4869,11 +4881,11 @@ async function saveWorkReflection(event) {
   confirmWorkReflection.disabled = false;
 }
 
-function startCard(id) {
+async function startCard(id) {
   const card = cards.find((item) => item.id === id);
   if (!workSession.active || !card || getCardState(card) !== "idle") return;
   Object.assign(card, startTimer(card));
-  saveCards();
+  if (!await saveCards()) return;
   render();
 }
 
@@ -4965,10 +4977,12 @@ window.addEventListener("storage", (event) => {
     ensureDailyHeaderClock(true);
     return;
   }
-  if (event.key !== STORAGE_KEY && event.key !== WORK_SESSION_KEY && event.key !== WORK_HISTORY_KEY) return;
-  if (event.key === STORAGE_KEY) cards = loadCards();
-  if (event.key === WORK_SESSION_KEY) workSession = loadWorkSession();
-  if (event.key === WORK_HISTORY_KEY) workHistoryStore = loadWorkHistory(event.newValue);
+});
+
+businessState.subscribe(({ keys }) => {
+  if (keys.includes(STORAGE_KEY)) cards = loadCards();
+  if (keys.includes(WORK_SESSION_KEY)) workSession = loadWorkSession();
+  if (keys.includes(WORK_HISTORY_KEY)) workHistoryStore = loadWorkHistory();
   render();
   refreshCodexEventStream();
   syncCodexCards();
@@ -5025,3 +5039,4 @@ setInterval(updateClocks, 1000);
 setInterval(updateWeatherForecast, 10 * 60 * 1000);
 setInterval(syncCodexCards, CODEX_FALLBACK_SYNC_MS);
 setInterval(syncWidgetSnapshot, WIDGET_SNAPSHOT_SYNC_MS);
+})().catch(window.EntropyState.fail);
