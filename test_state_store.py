@@ -30,6 +30,12 @@ class BusinessStateTests(unittest.TestCase):
         result = self.store.update({CARDS: {"base": base, "value": [{"id": "a", "title": "edited"}]}})
         self.assertEqual({r["id"]: r["title"] for r in result["data"][CARDS]}, {"a": "edited", "b": "B"})
 
+    def test_unchanged_draft_fields_do_not_overwrite_remote_edits(self):
+        base = self.store.snapshot()["data"][CARDS]
+        self.store.update({CARDS: {"base": base, "value": [{"id": "a", "title": "remote"}]}})
+        result = self.store.update({CARDS: {"base": base, "value": [{"id": "a", "title": "A", "tag": "local"}]}})
+        self.assertEqual(result["data"][CARDS][0], {"id": "a", "title": "remote", "tag": "local"})
+
     def test_conflict_rolls_back_whole_transaction(self):
         base = self.store.snapshot()["data"]
         self.store.update({CARDS: {"base": base[CARDS], "value": [{"id": "a", "title": "first"}]}})

@@ -1,5 +1,7 @@
-(function initializeWorkHistoryPage() {
+(async function initializeWorkHistoryPage() {
   "use strict";
+  await window.EntropyState.ready;
+  const businessState = window.EntropyState;
 
   const core = window.WorkHistoryCore;
   if (!core) throw new Error("WorkHistoryCore is required");
@@ -62,6 +64,7 @@
   let editingEntryId = "";
   let conversationDialogTrigger = null;
   let selectedConversationIds = new Set();
+  let editingHistoryBase;
 
   function isDemoMode() {
     return new URLSearchParams(window.location.search).get("demo") === "1";
@@ -69,7 +72,7 @@
 
   function loadStore(rawValue) {
     try {
-      const raw = rawValue === undefined ? localStorage.getItem(STORAGE_KEY) : rawValue;
+      const raw = rawValue === undefined ? businessState.getItem(STORAGE_KEY) : rawValue;
       return core.normalizeStore(raw);
     } catch {
       return { version: core.STORE_VERSION, updatedAt: 0, entries: [], unavailable: true };
@@ -78,7 +81,7 @@
 
   function loadReminderCards(rawValue) {
     try {
-      const raw = rawValue === undefined ? localStorage.getItem(CARDS_STORAGE_KEY) : rawValue;
+      const raw = rawValue === undefined ? businessState.getItem(CARDS_STORAGE_KEY) : rawValue;
       const parsed = JSON.parse(raw || "[]");
       return Array.isArray(parsed)
         ? parsed.filter((card) => card && typeof card.id === "string" && typeof card.codexThreadId === "string" && card.codexThreadId)
@@ -95,7 +98,7 @@
     toastTimer = window.setTimeout(() => toast.classList.remove("is-visible"), 2300);
   }
 
-  function saveEntries(nextEntries) {
+  async function saveEntries(nextEntries, base) {
     if (isDemoMode()) {
       showToast("演示数据不会写入历史");
       return false;
@@ -106,12 +109,12 @@
       entries: nextEntries,
     };
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-      store = core.normalizeStore(payload);
+      if (!await businessState.setItem(STORAGE_KEY, JSON.stringify(payload), base)) return false;
+      store = loadStore();
       entries = store.entries;
       return true;
     } catch {
-      showToast("保存失败，请检查浏览器本地存储空间");
+      showToast("保存失败，请检查本地数据库服务");
       return false;
     }
   }
@@ -295,6 +298,7 @@
   }
 
   function openConversationDialog(entryId, trigger) {
+    editingHistoryBase = businessState.getItem(STORAGE_KEY);
     const entry = entries.find((item) => item.id === entryId);
     if (!entry) return;
     editingEntryId = entry.id;
@@ -533,7 +537,7 @@
     renderConversationPicker();
   });
 
-  conversationForm.addEventListener("submit", (event) => {
+  conversationForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const entry = entries.find((item) => item.id === editingEntryId);
     if (!entry || isDemoMode()) return;
@@ -552,7 +556,7 @@
     });
     const updatedEntry = core.normalizeEntry({ ...entry, conversations });
     const nextEntries = entries.map((item) => item.id === entry.id ? updatedEntry : item);
-    if (!saveEntries(nextEntries)) return;
+    if (!await saveEntries(nextEntries, editingHistoryBase)) return;
     closeConversationDialog();
     renderAll({ animate: true });
     showToast(conversations.length ? `已为这个班次保存 ${conversations.length} 个对话` : "已清空这个班次保存的对话");
@@ -574,15 +578,14 @@
     renderAll({ direction, animate: true });
   });
 
-  window.addEventListener("storage", (event) => {
+  businessState.subscribe(({ keys }) => {
     if (isDemoMode()) return;
-    if (event.key === CARDS_STORAGE_KEY) {
-      reminderCards = loadReminderCards(event.newValue);
+    if (keys.includes(CARDS_STORAGE_KEY)) {
+      reminderCards = loadReminderCards();
       if (conversationDialog.open) renderConversationPicker();
-      return;
     }
-    if (event.key !== STORAGE_KEY) return;
-    store = loadStore(event.newValue);
+    if (!keys.includes(STORAGE_KEY)) return;
+    store = loadStore();
     if (store.incompatible) {
       showToast("另一页面保存了更新版本的历史数据");
       return;
@@ -595,4 +598,4 @@
   if (store.unavailable) window.setTimeout(() => showToast("浏览器已禁用本地存储"), 0);
   if (store.incompatible) window.setTimeout(() => showToast("历史数据来自更新版本，当前页面无法读取"), 0);
   renderAll({ animate: false });
-})();
+})().catch(window.EntropyState.fail);

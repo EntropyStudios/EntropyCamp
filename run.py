@@ -1106,7 +1106,10 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/state":
             try:
-                self._json_response(get_business_store().snapshot())
+                store = get_business_store()
+                revision = urllib.parse.parse_qs(parsed.query).get("revision", [None])[0]
+                current = store.revision()
+                self._json_response({"unchanged": True, "revision": current} if revision == str(current) else store.snapshot())
             except Exception:
                 self._json_response({"error": "无法读取本地数据库"}, 503)
             return

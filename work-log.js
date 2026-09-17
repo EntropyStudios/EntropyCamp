@@ -1,3 +1,6 @@
+(async function initializeWorkLog() {
+await window.EntropyState.ready;
+const businessState = window.EntropyState;
 const STORAGE_KEY = "lumen-reminder-cards-v1";
 const WORK_SESSION_KEY = "lumen-reminder-work-session-v1";
 const WORK_HISTORY_KEY = "lumen-reminder-work-history-v1";
@@ -40,7 +43,7 @@ function clearGeneratedReport(message = "设置已变更，重新生成后再复
 
 function loadCards() {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    const saved = JSON.parse(businessState.getItem(STORAGE_KEY) || "[]");
     return Array.isArray(saved)
       ? saved
           .filter((card) => card && card.codexThreadId)
@@ -58,7 +61,7 @@ function loadCards() {
 
 function loadWorkSession() {
   try {
-    const saved = JSON.parse(localStorage.getItem(WORK_SESSION_KEY) || "{}");
+    const saved = JSON.parse(businessState.getItem(WORK_SESSION_KEY) || "{}");
     return saved && typeof saved === "object" ? saved : {};
   } catch {
     return {};
@@ -68,7 +71,7 @@ function loadWorkSession() {
 function loadHistoricalContext() {
   if (!historyEntryId || !historyCore) return null;
   try {
-    const store = historyCore.normalizeStore(localStorage.getItem(WORK_HISTORY_KEY));
+    const store = historyCore.normalizeStore(businessState.getItem(WORK_HISTORY_KEY));
     const entry = store.entries.find((candidate) => candidate.id === historyEntryId);
     if (!entry || !entry.conversations.length) return null;
     const countsByCardId = {};
@@ -374,9 +377,9 @@ threadList.addEventListener("change", (event) => {
   clearGeneratedReport();
 });
 
-window.addEventListener("storage", (event) => {
+businessState.subscribe(({ keys }) => {
   if (historicalContext) return;
-  if (event.key !== STORAGE_KEY && event.key !== WORK_SESSION_KEY) return;
+  if (!keys.includes(STORAGE_KEY) && !keys.includes(WORK_SESSION_KEY)) return;
   cards = loadCards();
   workSession = loadWorkSession();
   currentMarkdown = "";
@@ -396,3 +399,4 @@ renderPage();
 if (workSession.startedAt && (historicalContext || cards.some((card) => workCountForCard(card) > 0))) {
   generateReport();
 }
+})().catch(window.EntropyState.fail);

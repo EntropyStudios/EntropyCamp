@@ -23,6 +23,9 @@ class StaticFileSecurityTests(unittest.TestCase):
             (root / "index.html").write_text("ok")
             (root / "private").mkdir()
             (root / "private" / "token").write_text("secret")
+            (root / "private" / "secret.js").write_text("secret")
+            (root / "assets").mkdir()
+            (root / "assets" / "leaked.js").symlink_to(root / "private" / "secret.js")
             (root / ".git").mkdir()
             (root / ".git" / "HEAD").write_text("ref: main")
             (root / "run.py").write_text("backend")
@@ -33,7 +36,7 @@ class StaticFileSecurityTests(unittest.TestCase):
                 base = f"http://127.0.0.1:{server.server_port}"
                 try:
                     for method in ("GET", "HEAD"):
-                        for path in ("/private/token", "/.git/HEAD", "/%2egit/HEAD", "/run.py", "/private/"):
+                        for path in ("/private/token", "/.git/HEAD", "/%2egit/HEAD", "/run.py", "/private/", "/assets/leaked.js"):
                             with self.subTest(method=method, path=path):
                                 with self.assertRaises(urllib.error.HTTPError) as caught:
                                     urllib.request.urlopen(urllib.request.Request(base + path, method=method))
@@ -47,6 +50,33 @@ class StaticFileSecurityTests(unittest.TestCase):
 
 
 class LauncherTests(unittest.TestCase):
+    def test_installed_legacy_and_autostart_launchers_use_new_service_and_zen(self):
+        root = Path(__file__).parent
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary)
+            binaries = home / "bin"
+            binaries.mkdir()
+            (home / ".local/bin").mkdir(parents=True)
+            for name, body in {
+                "systemctl": 'printf "%s\\n" "$*" >> "$QA_CALLS"',
+                "curl": "exit 0",
+                "xdg-open": "exit 29",
+            }.items():
+                path = binaries / name
+                path.write_text("#!/bin/sh\n" + body + "\n")
+                path.chmod(0o755)
+            zen = home / ".local/bin/zen"
+            zen.write_text('#!/bin/sh\nprintf "%s\\n" "$*" >> "$QA_CALLS"\n')
+            zen.chmod(0o755)
+            env = {**os.environ, "HOME": str(home), "PATH": str(binaries) + ":/usr/bin:/bin", "QA_CALLS": str(home / "calls")}
+            subprocess.run(["sh", str(root / "scripts/install-launchers.sh")], env=env, check=True)
+            subprocess.run([str(home / ".local/bin/codex-reminder-cards")], env=env, check=True)
+            subprocess.run([str(home / ".local/bin/open-entropycamp-page"), "--claim-source"], env=env, check=True)
+            calls = (home / "calls").read_text().splitlines()
+            self.assertEqual(calls[0], "--user start entropycamp.service")
+            self.assertEqual(calls[1], "http://127.0.0.1:8765/?variant=A")
+            self.assertEqual(calls[3], "http://127.0.0.1:8765/?variant=A&widgetSource=claim")
+
     def test_launcher_prefers_zen_and_legacy_command_redirects(self):
         root = Path(__file__).parent
         launcher = (root / "scripts/open-entropycamp-page").read_text()
@@ -175,7 +205,7 @@ class FeishuNotifierTests(unittest.TestCase):
         self.assertIn('type="password"', html)
         self.assertIn('"X-Lumen-Request": "1"', app)
         self.assertIn('feishuRequest("/api/feishu/settings", { enabled: desiredEnabled })', app)
-        self.assertIn('enqueueFeishuEvent("codex_completed"', app)
+        self.assertIn('notifications.push(["codex_completed"', app)
         self.assertIn('enqueueFeishuEvent("work_ended"', app)
         self.assertIn('if parsed.path == "/api/feishu/events":', server)
         self.assertNotIn("localStorage.setItem(FEISHU", app)
@@ -189,6 +219,7 @@ class HeaderClockFirstPaintTests(unittest.TestCase):
 const fs = require("fs");
 const vm = require("vm");
 let source = fs.readFileSync(process.argv[1], "utf8");
+source = source.replace(/^\(async function initializeReminderApp\(\) \{\nawait window\.EntropyState\.ready;\nconst businessState = window\.EntropyState;\n/, 'const businessState = {getItem: () => null};\n');
 source = source.slice(0, source.indexOf("function corpusClockOffsetSeconds"));
 const document = {
   querySelector: () => null,
@@ -2172,9 +2203,9 @@ console.log(JSON.stringify(choices));
         self.assertIn("core.groupConversationChoices(reminderCards, entry.countsByCardId, entry.conversations)", script)
         self.assertNotIn('/api/codex/threads', script)
         self.assertIn("core.normalizeEntry({ ...entry, conversations })", script)
-        self.assertIn("localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))", script)
+        self.assertIn("await businessState.setItem(STORAGE_KEY, JSON.stringify(payload), base)", script)
         self.assertIn("读取它在这 ${formatDuration(entry.durationMs)} 班次窗口内的全部消息", script)
-        persist_index = app.index("if (!persistWorkHistoryEntry(entry))")
+        persist_index = app.index("if (!await persistWorkHistoryEntry(entry, finalSession, finalCards))")
         self.assertLess(persist_index, app.index("endWorkSession(endedAt);", persist_index))
         self.assertRegex(css, r"\.history-calendar-grid\s*\{[^}]*gap:")
         self.assertIn("grid-template-columns: repeat(7, minmax(0, 1fr))", css)

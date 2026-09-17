@@ -1,5 +1,7 @@
-(function initializeClipboardPage() {
+(async function initializeClipboardPage() {
   "use strict";
+  await window.EntropyState.ready;
+  const businessState = window.EntropyState;
 
   const core = window.ClipboardCore;
   if (!core) throw new Error("ClipboardCore is required");
@@ -32,11 +34,12 @@
   let toastTimer = 0;
   let armedDeleteId = null;
   let armedDeleteTimer = 0;
+  let editingBase;
   const expandedIds = new Set();
 
   function loadStore(rawValue) {
     try {
-      const raw = rawValue === undefined ? localStorage.getItem(STORAGE_KEY) : rawValue;
+      const raw = rawValue === undefined ? businessState.getItem(STORAGE_KEY) : rawValue;
       return core.normalizeStore(raw);
     } catch {
       return { version: core.STORE_VERSION, updatedAt: 0, items: [], unavailable: true };
@@ -48,7 +51,7 @@
     return value.length * 2;
   }
 
-  function persist(nextItems) {
+  async function persist(nextItems, base) {
     if (storeState.incompatible) {
       showToast("本地数据来自更新版本，当前页面不会覆盖它");
       return false;
@@ -63,12 +66,12 @@
       return false;
     }
     try {
-      localStorage.setItem(STORAGE_KEY, payload);
-      items = nextItems;
-      storeState = { version: core.STORE_VERSION, updatedAt: Date.now(), items };
+      if (!await businessState.setItem(STORAGE_KEY, payload, base)) return false;
+      storeState = loadStore();
+      items = storeState.items;
       return true;
     } catch {
-      showToast("保存失败，本地存储空间可能已满");
+      showToast("保存失败，请检查本地数据库服务");
       return false;
     }
   }
@@ -415,6 +418,7 @@
   }
 
   function openNewDialog(opener) {
+    editingBase = businessState.getItem(STORAGE_KEY);
     if (storeState.incompatible) {
       showToast("本地数据来自更新版本，当前页面暂不允许写入");
       return;
@@ -430,6 +434,7 @@
   }
 
   function openEditDialog(id, opener) {
+    editingBase = businessState.getItem(STORAGE_KEY);
     const item = items.find((candidate) => candidate.id === id);
     if (!item) return;
     returnFocus = opener || document.activeElement;
@@ -451,7 +456,7 @@
     if (dialog.open) dialog.close();
   }
 
-  function saveClip(event) {
+  async function saveClip(event) {
     event.preventDefault();
     const content = clipContent.value;
     if (!content.trim()) {
@@ -462,6 +467,10 @@
     clipContent.setCustomValidity("");
     const now = Date.now();
     const existing = items.find((item) => item.id === clipId.value);
+    if (clipId.value && !existing) {
+      showToast("该剪贴已在另一个页面删除，请保留编辑内容");
+      return;
+    }
     const format = selectedFormat();
     const item = {
       id: existing?.id || createId(),
@@ -476,7 +485,7 @@
     const nextItems = existing
       ? items.map((candidate) => candidate.id === item.id ? item : candidate)
       : [...items, item];
-    if (!persist(nextItems)) return;
+    if (!await persist(nextItems, editingBase)) return;
     closeDialog();
     renderCards({ enteringId: existing ? null : item.id });
     showToast(existing ? "已更新" : "已保存");
@@ -510,9 +519,9 @@
     }
   }
 
-  function updateItem(id, change, options = {}) {
+  async function updateItem(id, change, options = {}) {
     const nextItems = items.map((item) => item.id === id ? { ...item, ...change } : item);
-    if (!persist(nextItems)) return false;
+    if (!await persist(nextItems)) return false;
     renderCards({ animate: options.animate !== false });
     return true;
   }
@@ -521,7 +530,7 @@
     const item = items.find((candidate) => candidate.id === id);
     if (!item) return false;
     const nextItems = items.filter((candidate) => candidate.id !== id);
-    if (!persist(nextItems)) return false;
+    if (!await persist(nextItems)) return false;
     const card = grid.querySelector(`[data-clip-id="${CSS.escape(id)}"]`);
     if (card && !layoutMotion.matches) {
       try {
@@ -607,10 +616,10 @@
     if (button.dataset.clipAction === "edit") openEditDialog(item.id, button);
     if (button.dataset.clipAction === "delete") await requestDelete(item.id, button);
     if (button.dataset.clipAction === "pin") {
-      updateItem(item.id, { pinned: !item.pinned, updatedAt: Date.now() });
+      await updateItem(item.id, { pinned: !item.pinned, updatedAt: Date.now() });
     }
     if (button.dataset.clipAction === "view") {
-      updateItem(item.id, { viewMode: button.dataset.viewMode });
+      await updateItem(item.id, { viewMode: button.dataset.viewMode });
     }
     if (button.dataset.clipAction === "expand") {
       if (expandedIds.has(item.id)) expandedIds.delete(item.id);
@@ -619,9 +628,9 @@
     }
   });
 
-  window.addEventListener("storage", (event) => {
-    if (event.key !== STORAGE_KEY) return;
-    const nextStore = loadStore(event.newValue);
+  businessState.subscribe(({ keys }) => {
+    if (!keys.includes(STORAGE_KEY)) return;
+    const nextStore = loadStore();
     if (nextStore.incompatible) {
       showToast("另一页面保存了更新版本的数据");
       return;
@@ -635,4 +644,4 @@
   if (storeState.unavailable) window.setTimeout(() => showToast("浏览器已禁用本地存储"), 0);
   if (storeState.incompatible) window.setTimeout(() => showToast("本地数据来自更新版本，当前页面为只读"), 0);
   renderCards({ animate: false });
-})();
+})().catch(window.EntropyState.fail);

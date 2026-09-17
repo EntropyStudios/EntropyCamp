@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import contextlib
 import json
 import os
 import sqlite3
@@ -95,14 +96,21 @@ class BusinessStateStore:
 
     def _protect(self):
         for path in (self.path, Path(str(self.path) + "-wal"), Path(str(self.path) + "-shm")):
-            if path.exists():
+            try:
                 os.chmod(path, 0o600)
+            except FileNotFoundError:
+                pass
 
+    @contextlib.contextmanager
     def _connect(self):
         connection = sqlite3.connect(self.path, timeout=10)
         connection.execute("PRAGMA synchronous=FULL")
         self._protect()
-        return connection
+        try:
+            with connection:
+                yield connection
+        finally:
+            connection.close()
 
     @staticmethod
     def _snapshot(connection):
@@ -115,6 +123,10 @@ class BusinessStateStore:
         with self._lock, self._connect() as connection:
             connection.execute("BEGIN")
             return self._snapshot(connection)
+
+    def revision(self):
+        with self._lock, self._connect() as connection:
+            return int(connection.execute("SELECT value FROM metadata WHERE key='revision'").fetchone()[0])
 
     def initialize(self, values: dict, source: str = "browser"):
         if not isinstance(values, dict) or set(values) - set(DEFAULTS):
