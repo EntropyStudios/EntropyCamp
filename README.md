@@ -78,7 +78,9 @@ python3 run.py          # 或双击 启动提醒卡片.sh
 
 主视图是 Three.js 的 3D 关系图：正在使用的模型是恒星，工作中的对话是绕其公转的行星，保持关注的对话是很小的被捕获彗星。推理等级属于具体对话而非模型，体现在连线与行星细环的颜色上（最低蓝、最高红）。WebGL 不可用时降级为二维列表。
 
-> 该 renderer 尚未完成多节点浏览器截图与交互验收，详见 `docs/HANDOFF_TO_CLAUDE.md`。
+页面生命周期内只创建一个 Canvas 和 WebGL renderer。阶段、计时、强度与标题变化原位更新；节点结构变化会释放旧场景对象后在同一上下文重建。页面隐藏时暂停动画，真正离开时释放 GPU 对象并主动结束上下文。详见 [WebGL 生命周期说明](docs/WEBGL_LIFECYCLE.md)。
+
+> 生命周期已通过多节点浏览器压力测试；太阳系视觉仍会继续迭代，详见 `docs/HANDOFF_TO_CLAUDE.md`。
 
 ## 技术
 
@@ -115,6 +117,7 @@ node --check graph-3d.js
 ## 文档
 
 - [交接说明](docs/HANDOFF_TO_CLAUDE.md)
+- [WebGL 生命周期说明](docs/WEBGL_LIFECYCLE.md)
 - [圣体钟规格](docs/corpus-clock-twin-spec.md)
 - [Big Ben 规格](docs/big-ben-clock-spec.md)
 - [Prague Orloj 规格](docs/prague-orloj-clock-spec.md)

@@ -239,6 +239,10 @@ let widgetSnapshotSyncing = false;
 let widgetSnapshotPending = false;
 let conversationGraphController = null;
 let conversationGraphMountVersion = 0;
+let conversationGraphMountPromise = null;
+let conversationGraphPending = null;
+let conversationGraphRenderFrame = 0;
+let conversationGraphDisposed = false;
 
 const grid = document.querySelector("#cardGrid");
 const dialog = document.querySelector("#cardDialog");
@@ -4220,29 +4224,50 @@ function showGraphNodeInspector(node) {
 }
 
 async function mountConversationGraph(sorted, now = Date.now()) {
-  const version = ++conversationGraphMountVersion;
-  conversationGraphController?.dispose?.();
-  conversationGraphController = null;
-  grid.classList.remove("is-3d-ready", "is-3d-fallback");
+  if (conversationGraphDisposed || grid.classList.contains("is-3d-fallback")) return;
+  const options = { nodes: graph3DNodes(sorted, now), reducedMotion: shouldReduceMotion() };
+  conversationGraphPending = { sorted, now, ...options };
+  if (conversationGraphController) {
+    try {
+      conversationGraphController.update(options);
+    } catch (error) {
+      conversationGraphController.dispose();
+      conversationGraphController = null;
+      grid.classList.remove("is-3d-ready");
+      grid.classList.add("is-3d-fallback");
+      console.warn("3D graph update failed; using accessible fallback", error);
+    }
+    return;
+  }
+  if (conversationGraphMountPromise) return conversationGraphMountPromise;
   const shell = grid.querySelector("[data-graph-3d-shell]");
   const canvas = shell?.querySelector("canvas");
   if (!shell || !canvas) return;
-  try {
-    const module = await import("./graph-3d.js");
-    if (version !== conversationGraphMountVersion || !shell.isConnected) return;
-    conversationGraphController = module.createConversationGraph({
-      container: shell,
-      canvas,
-      nodes: graph3DNodes(sorted, now),
-      reducedMotion: shouldReduceMotion(),
-      onNodeSelect: showGraphNodeInspector,
-    });
-    shell.querySelector(".graph-3d-loading")?.remove();
-    grid.classList.add("is-3d-ready");
-  } catch (error) {
-    console.warn("3D graph unavailable; using accessible fallback", error);
-    grid.classList.add("is-3d-fallback");
-  }
+  const version = ++conversationGraphMountVersion;
+  conversationGraphMountPromise = (async () => {
+    try {
+      const module = await import("./graph-3d.js");
+      if (version !== conversationGraphMountVersion || conversationGraphDisposed || !shell.isConnected) return;
+      conversationGraphController = module.createConversationGraph({
+        container: shell, canvas,
+        nodes: conversationGraphPending.nodes,
+        reducedMotion: conversationGraphPending.reducedMotion,
+        onNodeSelect: showGraphNodeInspector,
+      });
+      conversationGraphController.setActive(!document.hidden);
+      shell.querySelector(".graph-3d-loading")?.remove();
+      grid.classList.add("is-3d-ready");
+    } catch (error) {
+      conversationGraphController?.dispose?.();
+      conversationGraphController = null;
+      grid.classList.remove("is-3d-ready");
+      console.warn("3D graph unavailable; using accessible fallback", error);
+      grid.classList.add("is-3d-fallback");
+    } finally {
+      if (version === conversationGraphMountVersion) conversationGraphMountPromise = null;
+    }
+  })();
+  return conversationGraphMountPromise;
 }
 
 function updateGraphRuntimeLabels(now = Date.now()) {
@@ -4374,10 +4399,22 @@ function render(options = {}) {
   grid.classList.toggle("has-secondary", sorted.length > dueCards.length);
   grid.classList.add("card-graph");
   grid.dataset.dueCount = String(dueCards.length);
-  grid.innerHTML = graph3DMarkup(sorted, now);
-  animateCardLayout(previousRects);
-  requestAnimationFrame(updateGraphConnections);
-  mountConversationGraph(sorted, now);
+  if (!grid.querySelector("[data-graph-3d-shell]")) grid.innerHTML = graph3DMarkup(sorted, now);
+  conversationGraphPending = { sorted, now, nodes: graph3DNodes(sorted, now), reducedMotion: shouldReduceMotion() };
+  if (conversationGraphRenderFrame) return;
+  conversationGraphRenderFrame = requestAnimationFrame(() => {
+    conversationGraphRenderFrame = 0;
+    if (conversationGraphDisposed) return;
+    const pending = conversationGraphPending;
+    const fallback = grid.querySelector(".graph-fallback");
+    const markup = graphMarkup(pending.sorted, pending.now);
+    if (fallback && fallback.innerHTML !== markup) fallback.innerHTML = markup;
+    if (grid.classList.contains("is-3d-fallback")) {
+      animateCardLayout(previousRects);
+      updateGraphConnections();
+    }
+    mountConversationGraph(pending.sorted, pending.now);
+  });
 }
 
 function updateClocks() {
@@ -4980,6 +5017,7 @@ window.addEventListener("storage", (event) => {
 });
 
 businessState.subscribe(({ keys }) => {
+  if (!keys.includes(STORAGE_KEY) && !keys.includes(WORK_SESSION_KEY) && !keys.includes(WORK_HISTORY_KEY)) return;
   if (keys.includes(STORAGE_KEY)) cards = loadCards();
   if (keys.includes(WORK_SESSION_KEY)) workSession = loadWorkSession();
   if (keys.includes(WORK_HISTORY_KEY)) workHistoryStore = loadWorkHistory();
@@ -5003,6 +5041,7 @@ window.addEventListener("online", () => {
   queueWidgetSnapshotSync(0);
 });
 document.addEventListener("visibilitychange", () => {
+  conversationGraphController?.setActive?.(!document.hidden);
   if (document.visibilityState === "visible") {
     HEADER_CLOCK_RUNTIMES[activeHeaderClockId]?.resume({
       now: performance.now(),
@@ -5015,10 +5054,29 @@ document.addEventListener("visibilitychange", () => {
     stopCorpusClockAnimation();
   }
 });
-window.addEventListener("beforeunload", () => {
+window.addEventListener("pagehide", () => {
   stopCorpusClockAnimation();
+  conversationGraphDisposed = true;
+  conversationGraphMountVersion += 1;
+  conversationGraphMountPromise = null;
+  cancelAnimationFrame(conversationGraphRenderFrame);
+  conversationGraphRenderFrame = 0;
   conversationGraphController?.dispose?.();
+  conversationGraphController = null;
   codexEventSource?.close();
+  codexEventSource = null;
+  codexEventKey = "";
+});
+window.addEventListener("pageshow", (event) => {
+  if (!event.persisted) return;
+  conversationGraphDisposed = false;
+  grid.classList.remove("is-3d-ready", "is-3d-fallback");
+  grid.innerHTML = graph3DMarkup(cards, Date.now());
+  startCorpusClockAnimation();
+  conversationGraphController?.setActive?.(!document.hidden);
+  render({ animate: false });
+  refreshCodexEventStream();
+  syncCodexCards();
 });
 
 HEADER_CLOCKS.forEach((clock) => HEADER_CLOCK_RUNTIMES[clock.id]?.initialize());

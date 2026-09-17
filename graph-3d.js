@@ -1,5 +1,7 @@
 import * as THREE from "./assets/vendor/three.module.js";
 
+let rendererGeneration = 0;
+
 const STATE_STYLE = {
   due: { radius: 0.68, color: 0xe6f5eb },
   processing: { radius: 0.34, color: 0x83c7ab },
@@ -151,6 +153,7 @@ function createNode(node, index, resources) {
     emissive: comet ? color : node.state === "due" ? 0x728e7d : 0x000000,
     emissiveIntensity: comet ? 0.6 : node.state === "due" ? 0.33 : 0,
   });
+  let effortRing = null;
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, comet ? 12 : 32, comet ? 8 : 20), material);
   group.add(mesh);
   if (isModel) {
@@ -172,12 +175,13 @@ function createNode(node, index, resources) {
       }));
     ring.rotation.x = -0.2;
     group.add(ring);
+    effortRing = ring;
   }
   const hitMesh = new THREE.Mesh(new THREE.SphereGeometry(Math.max(radius, 0.2), 12, 8),
     new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
   hitMesh.userData.graphNode = node;
   group.add(hitMesh);
-  group.userData = { node, radius, comet, mesh, hitMesh, base: new THREE.Vector3() };
+  group.userData = { node, radius, comet, mesh, hitMesh, effortRing, base: new THREE.Vector3() };
   return group;
 }
 
@@ -209,43 +213,108 @@ function disposeObject(object) {
 
 export function createConversationGraph({ container, canvas, nodes, reducedMotion = false, onNodeSelect }) {
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "low-power" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.7));
-  renderer.setClearColor(0x000000, 0);
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 150);
-  camera.position.set(0, 0, 14);
-  scene.add(new THREE.HemisphereLight(0xe8efe9, 0x172019, 1.15));
-  const key = new THREE.DirectionalLight(0xfff0d4, 1.8);
-  key.position.set(3, 4, 8);
-  scene.add(key);
   const root = new THREE.Group();
+  const graphLayer = new THREE.Group();
   root.rotation.set(0.1, -0.1, 0);
+  root.add(graphLayer);
   scene.add(root);
-  const labelLayer = document.createElement("div");
-  labelLayer.className = "graph-space-labels";
-  labelLayer.setAttribute("aria-hidden", "true");
-  container.append(labelLayer);
   const resources = { starMaterials: [] };
   const nodeGroups = [];
   const pickables = [];
   const flowParticles = [];
   const edges = [];
-  const modelNodes = nodes.filter((node) => node.kind === "model");
-  const threadNodes = nodes.filter((node) => node.kind === "thread");
-  const centers = modelCenters(modelNodes);
-  const modelPositions = new Map(modelNodes.map((node, index) => [node.id, centers[index]]));
-  const modelGroups = new Map();
+  const bindings = [];
+  let labelLayer = null;
+  let resizeObserver = null;
+  let disposed = false;
+  let active = true;
+  let frame = 0;
+  let frameCount = 0;
+  let width = 0;
+  let height = 0;
+  let fitDistance = 14;
+  let zoom = 1;
   let extentX = 3;
   let extentY = 2.5;
+  let selectedId = null;
+  let hoveredId = null;
+  let dragging = false;
+  let dragged = false;
+  let lastX = 0;
+  let lastY = 0;
+  let elapsed = 0;
+  let previousTime = 0;
+  let signature = null;
+  let updateCount = 0;
+  const generation = ++rendererGeneration;
+  container.dataset.graphRendererGeneration = String(generation);
+  container.dataset.graphUpdateCount = "0";
 
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
+    active = false;
+    cancelAnimationFrame(frame);
+    resizeObserver?.disconnect();
+    bindings.forEach(([type, listener, options]) => canvas.removeEventListener(type, listener, options));
+    labelLayer?.remove();
+    try {
+      disposeObject(root);
+    } finally {
+      try {
+        renderer.dispose();
+      } finally {
+        renderer.forceContextLoss();
+        canvas.width = 1;
+        canvas.height = 1;
+        renderer.info.memory.geometries = 0;
+        renderer.info.memory.textures = 0;
+      }
+    }
+    nodeGroups.length = pickables.length = flowParticles.length = edges.length = 0;
+    resources.starMaterials.length = 0;
+    root.clear();
+    scene.clear();
+    nodes = [];
+    selectedId = null;
+    container.dataset.graphDisposed = "true";
+  }
+
+  try {
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.7));
+    renderer.setClearColor(0x000000, 0);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    scene.add(new THREE.HemisphereLight(0xe8efe9, 0x172019, 1.15));
+    const key = new THREE.DirectionalLight(0xfff0d4, 1.8);
+    key.position.set(3, 4, 8);
+    scene.add(key);
+    labelLayer = document.createElement("div");
+    labelLayer.className = "graph-space-labels";
+    labelLayer.setAttribute("aria-hidden", "true");
+    container.append(labelLayer);
+
+    function rebuildScene() {
+      disposeObject(graphLayer);
+      graphLayer.clear();
+      labelLayer.replaceChildren();
+      nodeGroups.length = pickables.length = flowParticles.length = edges.length = 0;
+      resources.starMaterials.length = 0;
+      extentX = 3;
+      extentY = 2.5;
+      const modelNodes = nodes.filter((node) => node.kind === "model");
+      const threadNodes = nodes.filter((node) => node.kind === "thread");
+      const centers = modelCenters(modelNodes);
+      const modelPositions = new Map(modelNodes.map((node, index) => [node.id, centers[index]]));
+      const modelGroups = new Map();
   function registerNode(node, index, center, orbit) {
     const group = createNode(node, index, resources);
     group.userData.base.copy(center);
     group.userData.orbit = orbit;
-    group.position.copy(orbit ? orbitPoint(orbit, 0, center) : center);
-    root.add(group);
+    group.position.copy(orbit ? orbitPoint(orbit, elapsed, center) : center);
+    graphLayer.add(group);
     nodeGroups.push(group);
     pickables.push(group.userData.hitMesh);
     if (!group.userData.comet) group.userData.label = createLabel(labelLayer, node);
@@ -253,7 +322,7 @@ export function createConversationGraph({ container, canvas, nodes, reducedMotio
     extentX = Math.max(extentX, Math.abs(center.x) + bound + 0.65);
     extentY = Math.max(extentY, Math.abs(center.y) + (orbit ? orbit.semiMinor : bound) + 0.9);
     if (orbit && !group.userData.comet) {
-      root.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(
+      graphLayer.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(
         Array.from({ length: 100 }, (_, step) => orbitPoint({ ...orbit, phase: step / 100 * Math.PI * 2 }, 0, center)),
       ), new THREE.LineBasicMaterial({ color: 0xa3a7a2, transparent: true, opacity: 0.1, depthWrite: false })));
     }
@@ -269,7 +338,7 @@ export function createConversationGraph({ container, canvas, nodes, reducedMotio
       geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
       geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
       const tail = new THREE.Line(geometry, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6, depthWrite: false }));
-      root.add(tail);
+      graphLayer.add(tail);
       group.userData.tail = tail;
     }
     return group;
@@ -296,16 +365,19 @@ export function createConversationGraph({ container, canvas, nodes, reducedMotio
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(25 * 3), 3));
     const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.42, depthWrite: false }));
-    root.add(line);
+    graphLayer.add(line);
     const edge = { node, group, modelGroup, line, curve: new THREE.QuadraticBezierCurve3(), label: createLabel(labelLayer, node, true) };
     edges.push(edge);
     for (let step = 0; step < 2; step += 1) {
       const particle = new THREE.Mesh(new THREE.SphereGeometry(0.026, 8, 6), new THREE.MeshBasicMaterial({ color }));
       particle.userData = { edge, offset: step / 2 };
-      root.add(particle);
+      graphLayer.add(particle);
       flowParticles.push(particle);
     }
   });
+
+
+    }
 
   const starPositions = new Float32Array(320 * 3);
   for (let index = 0; index < 320; index += 1) {
@@ -315,33 +387,28 @@ export function createConversationGraph({ container, canvas, nodes, reducedMotio
   stars.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
   root.add(new THREE.Points(stars, new THREE.PointsMaterial({ color: 0x9fafa9, size: 0.02, transparent: true, opacity: 0.55 })));
 
-  let width = 1;
-  let height = 1;
-  let fitDistance = 14;
-  let zoom = 1;
-  let selectedId = null;
-  let hoveredId = null;
-  let dragging = false;
-  let dragged = false;
-  let lastX = 0;
-  let lastY = 0;
-  function resize() {
-    const rect = container.getBoundingClientRect();
-    width = Math.max(1, Math.floor(rect.width));
-    height = Math.max(1, Math.floor(rect.height));
-    renderer.setSize(width, height, false);
-    camera.aspect = width / height;
-    camera.fov = width < 560 ? 49 : 42;
-    const tangent = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
-    fitDistance = Math.max(8, extentY / tangent, extentX / (tangent * camera.aspect)) + 2.1;
-    camera.position.z = fitDistance * zoom;
-    camera.far = Math.max(150, fitDistance * 3);
-    camera.updateProjectionMatrix();
-  }
-  const resizeObserver = new ResizeObserver(resize);
-  resizeObserver.observe(container);
-  resize();
 
+    function resize() {
+      if (disposed) return;
+      const rect = container.getBoundingClientRect();
+      const nextWidth = Math.max(1, Math.floor(rect.width));
+      const nextHeight = Math.max(1, Math.floor(rect.height));
+      const ratio = Math.min(window.devicePixelRatio || 1, 1.7);
+      // Assigning canvas dimensions can reallocate its drawing buffer.
+      if (width !== nextWidth || height !== nextHeight || renderer.getPixelRatio() !== ratio) {
+        width = nextWidth;
+        height = nextHeight;
+        if (renderer.getPixelRatio() !== ratio) renderer.setPixelRatio(ratio);
+        renderer.setSize(width, height, false);
+      }
+      camera.aspect = width / height;
+      camera.fov = width < 560 ? 49 : 42;
+      const tangent = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+      fitDistance = Math.max(8, extentY / tangent, extentX / (tangent * camera.aspect)) + 2.1;
+      camera.position.z = fitDistance * zoom;
+      camera.far = Math.max(150, fitDistance * 3);
+      camera.updateProjectionMatrix();
+    }
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
   function pickedNode(event) {
@@ -402,6 +469,10 @@ export function createConversationGraph({ container, canvas, nodes, reducedMotio
   canvas.addEventListener("wheel", onWheel, { passive: false });
   canvas.addEventListener("keydown", onKeyDown);
 
+
+    bindings.push(["pointerdown", onPointerDown], ["pointermove", onPointerMove],
+      ["pointerup", onPointerUp], ["pointercancel", onPointerCancel],
+      ["wheel", onWheel, { passive: false }], ["keydown", onKeyDown]);
   const projected = new THREE.Vector3();
   function project(point) {
     projected.copy(point).applyMatrix4(root.matrixWorld).project(camera);
@@ -449,75 +520,139 @@ export function createConversationGraph({ container, canvas, nodes, reducedMotio
     });
   }
 
-  let disposed = false;
-  let frame = 0;
-  let lastLabelSecond = -1;
-  let previousTime = 0;
-  let elapsed = 0;
-  function animate(now) {
-    if (disposed) return;
-    const delta = Math.min(0.05, previousTime ? (now - previousTime) / 1000 : 0);
-    previousTime = now;
-    if (!reducedMotion && !dragging && !selectedId) elapsed += delta;
-    nodeGroups.forEach((group) => {
-      const { orbit, base, mesh, tail } = group.userData;
-      if (orbit) group.position.copy(orbitPoint(orbit, elapsed, base));
-      if (!reducedMotion && !selectedId) mesh.rotation.y += delta * 0.04;
-      if (tail) {
-        const attribute = tail.geometry.attributes.position;
+
+    function setLabelText(element, title, subtitle) {
+      if (!element) return;
+      const strong = element.querySelector("strong");
+      const span = element.querySelector("span");
+      if (strong && strong.textContent !== title) strong.textContent = title;
+      if (span && span.textContent !== subtitle) span.textContent = subtitle;
+    }
+
+    function update({ nodes: nextNodes, reducedMotion: nextMotion = reducedMotion }) {
+      if (disposed) return false;
+      reducedMotion = nextMotion;
+      nodes = [...nextNodes].sort((left, right) => left.id.localeCompare(right.id));
+      const nextSignature = JSON.stringify(nodes.map((node) => [node.id, node.kind, node.state, node.modelId]));
+      if (nextSignature !== signature) {
+        rebuildScene();
+        signature = nextSignature;
+        resize();
+      }
+      const byId = new Map(nodes.map((node) => [node.id, node]));
+      nodeGroups.forEach((group) => {
+        const node = byId.get(group.userData.node.id);
+        group.userData.node = node;
+        group.userData.hitMesh.userData.graphNode = node;
+        setLabelText(group.userData.label, node.label, node.kind === "model"
+          ? (node.threadCount || 0) + " 个工作对话" : threadNodeSubtitle(node));
+        if (group.userData.effortRing) {
+          group.userData.effortRing.material.color.setHex(node.effort ? effortColor(node.effort)
+            : STATE_STYLE[node.state]?.color || 0xa3bcc8);
+          group.userData.effortRing.material.opacity = node.effort ? 0.65 : 0.2;
+        }
+      });
+      edges.forEach((edge) => {
+        edge.node = byId.get(edge.node.id);
+        edge.line.material.color.setHex(effortColor(edge.node.effort));
+        edge.label.style.setProperty("--effort-color", "#" + edge.line.material.color.getHexString());
+        setLabelText(edge.label, threadEdgeLabel(edge.node));
+      });
+      flowParticles.forEach((particle) => particle.material.color.setHex(effortColor(particle.userData.edge.node.effort)));
+      container.dataset.graphNodeCount = String(nodes.length);
+      container.dataset.graphCometCount = String(nodeGroups.filter((group) => group.userData.comet).length);
+      updateCount += 1;
+      container.dataset.graphUpdateCount = String(updateCount);
+      if (selectedId) {
+        const selected = byId.get(selectedId);
+        if (!selected) selectedId = null;
+        onNodeSelect?.(selected || null);
+        container.dataset.selectedNode = selectedId || "";
+      }
+      return true;
+    }
+
+    function renderOnce(delta = 0) {
+      if (disposed) return false;
+      if (!reducedMotion && !dragging && !selectedId) elapsed += delta;
+      nodeGroups.forEach((group) => {
+        const { orbit, base, mesh, tail } = group.userData;
+        if (orbit) group.position.copy(orbitPoint(orbit, elapsed, base));
+        if (!reducedMotion && !selectedId) mesh.rotation.y += delta * 0.04;
+        if (tail) {
+          const attribute = tail.geometry.attributes.position;
+          for (let step = 0; step < attribute.count; step += 1) {
+            const point = orbitPoint(orbit, elapsed - step * 1.8, base);
+            attribute.setXYZ(step, point.x, point.y, point.z);
+          }
+          attribute.needsUpdate = true;
+        }
+      });
+      resources.starMaterials.forEach((material) => { material.uniforms.time.value = reducedMotion ? 0 : elapsed; });
+      edges.forEach((edge) => {
+        edge.curve.v0.copy(edge.modelGroup.position);
+        edge.curve.v2.copy(edge.group.position);
+        edge.curve.v1.copy(edge.curve.v0).lerp(edge.curve.v2, 0.5);
+        edge.curve.v1.z += 0.15;
+        const attribute = edge.line.geometry.attributes.position;
         for (let step = 0; step < attribute.count; step += 1) {
-          const point = orbitPoint(orbit, elapsed - step * 1.8, base);
+          const point = edge.curve.getPoint(step / (attribute.count - 1));
           attribute.setXYZ(step, point.x, point.y, point.z);
         }
         attribute.needsUpdate = true;
-      }
-    });
-    resources.starMaterials.forEach((material) => { material.uniforms.time.value = reducedMotion ? 0 : elapsed; });
-    edges.forEach((edge) => {
-      edge.curve.v0.copy(edge.modelGroup.position);
-      edge.curve.v2.copy(edge.group.position);
-      edge.curve.v1.copy(edge.curve.v0).lerp(edge.curve.v2, 0.5);
-      edge.curve.v1.z += 0.15;
-      const attribute = edge.line.geometry.attributes.position;
-      for (let step = 0; step < attribute.count; step += 1) {
-        const point = edge.curve.getPoint(step / (attribute.count - 1));
-        attribute.setXYZ(step, point.x, point.y, point.z);
-      }
-      attribute.needsUpdate = true;
-    });
-    flowParticles.forEach((particle) => {
-      particle.position.copy(particle.userData.edge.curve.getPoint((elapsed * 0.23 + particle.userData.offset) % 1));
-    });
-    const second = Math.floor(Date.now() / 1000);
-    if (second !== lastLabelSecond) {
-      edges.forEach((edge) => { edge.label.querySelector("strong").textContent = threadEdgeLabel(edge.node); });
-      lastLabelSecond = second;
+        setLabelText(edge.label, threadEdgeLabel(edge.node));
+      });
+      flowParticles.forEach((particle) => {
+        particle.position.copy(particle.userData.edge.curve.getPoint((elapsed * 0.23 + particle.userData.offset) % 1));
+      });
+      renderer.render(scene, camera);
+      placeLabels();
+      container.dataset.graphReady = "true";
+      frameCount += 1;
+      return true;
     }
-    renderer.render(scene, camera);
-    placeLabels();
-    container.dataset.graphReady = "true";
-    frame = requestAnimationFrame(animate);
-  }
-  container.dataset.graphNodeCount = String(nodes.length);
-  container.dataset.graphCometCount = String(nodeGroups.filter((group) => group.userData.comet).length);
-  frame = requestAnimationFrame(animate);
 
-  return {
-    renderer, scene, camera,
-    clearSelection() { selectedId = null; container.dataset.selectedNode = ""; },
-    dispose() {
-      disposed = true;
-      cancelAnimationFrame(frame);
-      resizeObserver.disconnect();
-      canvas.removeEventListener("pointerdown", onPointerDown);
-      canvas.removeEventListener("pointermove", onPointerMove);
-      canvas.removeEventListener("pointerup", onPointerUp);
-      canvas.removeEventListener("pointercancel", onPointerCancel);
-      canvas.removeEventListener("wheel", onWheel);
-      canvas.removeEventListener("keydown", onKeyDown);
-      labelLayer.remove();
-      disposeObject(root);
-      renderer.dispose();
-    },
-  };
+    function animate(now) {
+      frame = 0;
+      if (disposed || !active) return;
+      const delta = Math.min(0.05, previousTime ? (now - previousTime) / 1000 : 0);
+      previousTime = now;
+      renderOnce(delta);
+      frame = requestAnimationFrame(animate);
+    }
+
+    function setActive(value) {
+      if (disposed) return;
+      active = Boolean(value);
+      if (!active) {
+        cancelAnimationFrame(frame);
+        frame = 0;
+        previousTime = 0;
+      } else if (!frame) {
+        frame = requestAnimationFrame(animate);
+      }
+    }
+
+    update({ nodes, reducedMotion });
+    resizeObserver = new ResizeObserver(resize);
+    resizeObserver.observe(container);
+    setActive(true);
+
+    return {
+      renderer, scene, camera, update, setActive, renderOnce,
+      getSelectedNode: () => nodes.find((node) => node.id === selectedId) || null,
+      selectNode: (id) => selectNode(nodes.find((node) => node.id === id) || null),
+      clearSelection() { selectedId = null; container.dataset.selectedNode = ""; },
+      getDiagnostics() {
+        return { nodes: nodes.length, selectedId, elapsed, active, disposed, frameCount,
+          rotation: root.rotation.toArray(), camera: camera.position.toArray(), zoom,
+          geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures,
+          programs: renderer.info.programs?.length || 0 };
+      },
+      dispose,
+    };
+  } catch (error) {
+    dispose();
+    throw error;
+  }
 }

@@ -2,6 +2,13 @@
 
 更新时间：2026-09-17，Asia/Shanghai。本次在电脑重启后重新核对程序、服务与测试，重建已丢失的交接文档。
 
+> **2026-09-17 WebGL 生命周期修复。** 主页不再在每次状态更新时替换 Canvas / renderer；
+> 元数据原位更新，结构变化在同一上下文释放并重建 graph layer，镜头 / 选择 / 公转时刻保留。
+> 页面隐藏暂停 rAF，离开时释放 GPU 对象并主动 context loss。真实 WebGL 场景完成 1,060 次更新，
+> 始终一个上下文且资源计数回到基线；正式页面自然更新中 renderer generation 保持 1。
+> 依据与回归测试见 [WebGL 生命周期说明](WEBGL_LIFECYCLE.md)。原第 7、8 节中“频繁重建可能导致崩溃”风险已处理；
+> 但 Zen 长时间 GPU 进程显存曲线仍建议继续实际观察。
+
 > **2026-09-17 统一存储与修复更新（本节优先于历史描述）。**
 > 分支 `feature/shared-sqlite-storage`：静态 HTTP 已禁止 private / .git / 后端源码及目录列表；
 > 开机启动器优先 Zen，旧 CLI 兼容新服务，安装源脚本在 scripts/。
