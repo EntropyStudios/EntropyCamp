@@ -6,11 +6,44 @@ import subprocess
 import tempfile
 import time
 import unittest
+import threading
+import urllib.request
+import urllib.error
 from pathlib import Path
 from unittest import mock
 
 import run as reminder_run
 from feishu_notify import FeishuNotificationError, FeishuNotifier, feishu_signature
+
+
+class StaticFileSecurityTests(unittest.TestCase):
+    def test_private_hidden_and_non_asset_files_are_not_served(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "index.html").write_text("ok")
+            (root / "private").mkdir()
+            (root / "private" / "token").write_text("secret")
+            (root / ".git").mkdir()
+            (root / ".git" / "HEAD").write_text("ref: main")
+            (root / "run.py").write_text("backend")
+            with mock.patch.object(reminder_run, "APP_DIRECTORY", root):
+                server = reminder_run.ReminderServer(("127.0.0.1", 0), reminder_run.ReminderHandler)
+                worker = threading.Thread(target=server.serve_forever, daemon=True)
+                worker.start()
+                base = f"http://127.0.0.1:{server.server_port}"
+                try:
+                    for method in ("GET", "HEAD"):
+                        for path in ("/private/token", "/.git/HEAD", "/%2egit/HEAD", "/run.py", "/private/"):
+                            with self.subTest(method=method, path=path):
+                                with self.assertRaises(urllib.error.HTTPError) as caught:
+                                    urllib.request.urlopen(urllib.request.Request(base + path, method=method))
+                                self.assertEqual(caught.exception.code, 404)
+                    with urllib.request.urlopen(base + "/") as response:
+                        self.assertEqual(response.read(), b"ok")
+                finally:
+                    server.shutdown()
+                    server.server_close()
+                    worker.join(timeout=2)
 
 
 class FeishuNotifierTests(unittest.TestCase):

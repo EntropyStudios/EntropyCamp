@@ -825,6 +825,37 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         super().end_headers()
 
+    def _local_host(self) -> bool:
+        try:
+            host = urllib.parse.urlsplit("//" + self.headers.get("Host", "")).hostname
+        except ValueError:
+            host = None
+        if host not in {"localhost", "127.0.0.1", "::1"}:
+            self.send_error(403, "Local host required")
+            return False
+        return True
+
+    def send_head(self):
+        if not self._local_host():
+            return None
+        path = Path(self.translate_path(self.path)).resolve()
+        root = APP_DIRECTORY.resolve()
+        try:
+            parts = path.relative_to(root).parts
+        except ValueError:
+            parts = ("private",)
+        if not parts:
+            path = root / "index.html"
+            parts = ("index.html",)
+        public_extensions = {".html", ".js", ".css", ".svg", ".png", ".jpg", ".jpeg", ".webp", ".ico", ".woff", ".woff2", ".md"}
+        allowed = not any(part.startswith(".") for part in parts)
+        allowed = allowed and (len(parts) == 1 or parts[0] in {"assets", "docs"})
+        allowed = allowed and path.suffix.lower() in public_extensions and path.is_file()
+        if not allowed:
+            self.send_error(404, "Not found")
+            return None
+        return super().send_head()
+
     def _json_response(self, payload: dict[str, Any], status: int = 200) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
@@ -834,6 +865,9 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def _json_request(self, max_bytes: int = 64 * 1024) -> dict[str, Any]:
+        origin = self.headers.get("Origin")
+        if origin and urllib.parse.urlsplit(origin).netloc.lower() != self.headers.get("Host", "").lower():
+            raise PermissionError("不允许跨站写入")
         if self.headers.get("X-Lumen-Request") != "1":
             raise PermissionError("缺少本地请求标记")
         content_type = self.headers.get_content_type()
@@ -1058,6 +1092,8 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
             return
 
     def do_GET(self) -> None:
+        if not self._local_host():
+            return
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/codex/threads":
             try:
@@ -1091,6 +1127,8 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
         super().do_GET()
 
     def do_POST(self) -> None:
+        if not self._local_host():
+            return
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/api/widget/snapshot":
             try:
