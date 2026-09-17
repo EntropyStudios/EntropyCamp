@@ -25,6 +25,7 @@ from typing import Any
 from codex_monitor import CodexRolloutMonitor, CodexStateUnavailable
 from feishu_notify import FeishuNotificationError, FeishuNotifier
 from widget_service import WidgetSnapshotStore, create_widget_server
+from state_store import BusinessStateStore, StateConflict
 
 
 APP_DIRECTORY = Path(__file__).resolve().parent
@@ -34,6 +35,14 @@ WIDGET_DIRECTORY = Path(
 )
 WIDGET_SCRIPT_PATH = APP_DIRECTORY / "scriptable" / "LumenToday.js"
 WIDGET_STORE = WidgetSnapshotStore(WIDGET_DIRECTORY)
+BUSINESS_STORE = None
+
+
+def get_business_store():
+    global BUSINESS_STORE
+    if BUSINESS_STORE is None:
+        BUSINESS_STORE = BusinessStateStore()
+    return BUSINESS_STORE
 MAX_REPORT_THREADS = 20
 WORK_LOG_EVENT_TYPES = {
     "task_started",
@@ -1095,6 +1104,12 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
         if not self._local_host():
             return
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/state":
+            try:
+                self._json_response(get_business_store().snapshot())
+            except Exception:
+                self._json_response({"error": "无法读取本地数据库"}, 503)
+            return
         if parsed.path == "/api/codex/threads":
             try:
                 self._json_response({"available": True, "threads": self._list_codex_threads()})
@@ -1130,6 +1145,21 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
         if not self._local_host():
             return
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path in {"/api/state", "/api/state/import"}:
+            try:
+                body = self._json_request(max_bytes=32 * 1024 * 1024)
+                store = get_business_store()
+                result = store.initialize(body.get("data"), "browser") if parsed.path.endswith("/import") else store.update(body.get("updates"))
+                self._json_response(result)
+            except StateConflict as error:
+                self._json_response({"error": str(error)}, 409)
+            except PermissionError as error:
+                self._json_response({"error": str(error)}, 403)
+            except (ValueError, TypeError) as error:
+                self._json_response({"error": str(error)}, 400)
+            except Exception:
+                self._json_response({"error": "本地数据库保存失败"}, 503)
+            return
         if parsed.path == "/api/widget/snapshot":
             try:
                 snapshot = WIDGET_STORE.save_snapshot(self._json_request(max_bytes=32 * 1024))
