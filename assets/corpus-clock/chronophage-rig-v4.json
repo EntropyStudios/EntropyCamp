@@ -1,0 +1,181 @@
+{
+  "version": 4,
+  "coordinateSystem": {
+    "canvas": {
+      "width": 1024,
+      "height": 861
+    },
+    "source": {
+      "width": 1600,
+      "height": 1346
+    },
+    "origin": "top-left",
+    "xAxis": "right",
+    "yAxis": "down",
+    "angleUnit": "degrees",
+    "positiveAngle": "clockwise in screen coordinates"
+  },
+  "recommendedRuntime": {
+    "hostViewBox": {
+      "width": 1024,
+      "height": 1180
+    },
+    "registeredCanvasPlacement": {
+      "x": 242,
+      "y": -25,
+      "width": 500,
+      "height": 420,
+      "uniformScale": 0.48828125
+    },
+    "note": "Keep every registered v4 layer at this identical placement; rotate covers about their registered pivots."
+  },
+  "staticAssets": {
+    "torso": "chronophage-torso-v4.webp",
+    "passive": "chronophage-passive-v4.webp",
+    "jaw": "chronophage-jaw-v4.webp"
+  },
+  "covers": {
+    "front": {
+      "asset": "chronophage-front-cover-v4.webp",
+      "rigidity": "single rigid photographic cosmetic cover",
+      "sourcePivot": [
+        685,
+        690
+      ],
+      "pivot": [
+        438.4,
+        441.374
+      ],
+      "sourceFootCenter": [
+        353,
+        1163
+      ],
+      "footCenter": [
+        225.92,
+        743.94
+      ],
+      "sourceContactEdge": [
+        [
+          331,
+          1168
+        ],
+        [
+          375,
+          1158
+        ]
+      ],
+      "contactEdge": [
+        [
+          211.84,
+          747.138
+        ],
+        [
+          240.0,
+          740.741
+        ]
+      ],
+      "originalOrientationDeg": 125.065,
+      "contactTangentDeg": -12.804,
+      "recommendedRotationDeg": [
+        -2.2,
+        2.2
+      ],
+      "registeredAssetSize": {
+        "width": 1024,
+        "height": 861
+      },
+      "assetInspection": {
+        "alphaPixels": 8123,
+        "alphaBBox": [
+          199,
+          435,
+          454,
+          763
+        ]
+      }
+    },
+    "rear": {
+      "asset": "chronophage-rear-cover-v4.webp",
+      "rigidity": "single rigid photographic cosmetic cover",
+      "sourcePivot": [
+        837,
+        987
+      ],
+      "pivot": [
+        535.68,
+        631.357
+      ],
+      "sourceFootCenter": [
+        1045,
+        1158
+      ],
+      "footCenter": [
+        668.8,
+        740.741
+      ],
+      "sourceContactEdge": [
+        [
+          1019,
+          1154
+        ],
+        [
+          1071,
+          1162
+        ]
+      ],
+      "contactEdge": [
+        [
+          652.16,
+          738.183
+        ],
+        [
+          685.44,
+          743.3
+        ]
+      ],
+      "originalOrientationDeg": 39.424,
+      "contactTangentDeg": 8.746,
+      "recommendedRotationDeg": [
+        -3.5,
+        3.5
+      ],
+      "registeredAssetSize": {
+        "width": 1024,
+        "height": 861
+      },
+      "assetInspection": {
+        "alphaPixels": 40217,
+        "alphaBBox": [
+          499,
+          33,
+          765,
+          761
+        ]
+      }
+    }
+  },
+  "quality": {
+    "activeWheelOverlapPixels": {
+      "front": 0,
+      "rear": 0,
+      "total": 0
+    },
+    "staticLiveWheelOverlapPixels": 0,
+    "cleanPlateUncoveredTorsoPixels": 0,
+    "wheelRegionDefinition": "active-cover old-photo wheel exclusion: source wheel support excluding exact foot whitelists, plus a one-source-pixel guard",
+    "staticLiveWheelClearance": {
+      "sourceLiftPixels": 84,
+      "purpose": "keeps torso/passive alpha and its 8 px SVG drop shadow clear of live tooth tips"
+    },
+    "wheelClearanceFeather": {
+      "sourcePixels": 30,
+      "finalSvgPixelsApprox": 9.4
+    },
+    "coverRootFeather": {
+      "sourcePixels": 32,
+      "finalSvgPixelsApprox": 10.0
+    },
+    "motionExposureFringe": "transparent where no trustworthy same-patina donor exists; no synthetic opaque glass or rectangular inpaint",
+    "overlapThreshold": 8
+  }
+}

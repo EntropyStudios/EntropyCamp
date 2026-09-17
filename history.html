@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <title>工作历史</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="history.css" />
+  </head>
+  <body>
+    <div class="page history-page">
+      <header class="history-topbar">
+        <div class="history-heading">
+          <div>
+            <span>WORK HISTORY</span>
+            <h1>工作历史</h1>
+          </div>
+          <span class="history-record-count" id="historyRecordCount" aria-live="polite">0 次班次</span>
+        </div>
+        <div class="history-topbar-actions">
+          <a class="work-button link-button" href="./">返回提醒</a>
+          <button class="new-button" id="historyTodayButton" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z" /></svg>
+            本月
+          </button>
+        </div>
+      </header>
+
+      <main class="history-main">
+        <section class="history-month-overview" aria-label="本月汇总">
+          <div>
+            <span>累计工时</span>
+            <strong id="monthDuration">0小时</strong>
+          </div>
+          <div>
+            <span>完成对话</span>
+            <strong id="monthCompletions">0 次</strong>
+          </div>
+          <div>
+            <span>上班班次</span>
+            <strong id="monthShifts">0 次</strong>
+          </div>
+          <div>
+            <span>有记录的天数</span>
+            <strong id="monthDays">0 天</strong>
+          </div>
+        </section>
+
+        <div class="history-workspace">
+          <section class="history-calendar" aria-labelledby="historyMonthLabel">
+            <div class="history-calendar-head">
+              <div>
+                <span>北京时间</span>
+                <h2 id="historyMonthLabel">--</h2>
+              </div>
+              <div class="history-month-nav">
+                <button id="previousMonth" type="button" aria-label="上个月" title="上个月">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+                </button>
+                <button id="nextMonth" type="button" aria-label="下个月" title="下个月">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+                </button>
+              </div>
+            </div>
+            <div class="history-weekdays" aria-hidden="true">
+              <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+            </div>
+            <div class="history-calendar-grid" id="historyCalendarGrid" role="grid" aria-label="工作历史月历"></div>
+          </section>
+
+          <aside class="history-day-detail" id="historyDayDetail" aria-live="polite">
+            <div class="history-day-head">
+              <div>
+                <span id="selectedDayWeekday">--</span>
+                <h2 id="selectedDayTitle">选择一天</h2>
+              </div>
+              <span class="history-day-mood" id="selectedDayMood" hidden></span>
+            </div>
+            <div class="history-day-summary" id="historyDaySummary"></div>
+            <div class="history-shift-list" id="historyShiftList"></div>
+            <div class="history-day-empty" id="historyDayEmpty" hidden>
+              <span class="history-empty-line"></span>
+              <strong>这一天还没有工作记录</strong>
+              <small>上班后完成一次下班收尾，记录会出现在这里。</small>
+            </div>
+          </aside>
+        </div>
+      </main>
+    </div>
+
+    <dialog class="history-conversation-dialog" id="historyConversationDialog" aria-labelledby="historyConversationTitle">
+      <form class="history-conversation-form" id="historyConversationForm">
+        <div class="history-conversation-dialog-head">
+          <div>
+            <span>HISTORICAL BACKFILL</span>
+            <h2 id="historyConversationTitle">补选历史对话</h2>
+          </div>
+          <button class="history-dialog-close" id="closeHistoryConversationDialog" type="button" aria-label="关闭补选对话窗口">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+          </button>
+        </div>
+
+        <div class="history-conversation-range" id="historyConversationRange">
+          <span>读取范围</span>
+          <strong>--</strong>
+          <small>勾选一个对话后，查看时会读取它在这个班次时间段内的全部消息。</small>
+        </div>
+
+        <div class="history-conversation-toolbar">
+          <label class="history-conversation-search" for="historyConversationSearch">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m16.5 16.5 4 4" /></svg>
+            <input id="historyConversationSearch" type="search" autocomplete="off" placeholder="搜索提醒卡片或 Codex 对话名称" />
+          </label>
+          <button class="history-selection-toggle" id="toggleHistoryConversationSelection" type="button">全选当前结果</button>
+        </div>
+
+        <div class="history-conversation-picker" id="historyConversationPicker" role="group" aria-label="选择要补录的 Codex 对话"></div>
+        <p class="history-conversation-status" id="historyConversationStatus" role="status" aria-live="polite">选择已关联的 Codex 对话</p>
+
+        <div class="history-conversation-dialog-actions">
+          <button class="work-button" id="cancelHistoryConversationDialog" type="button">取消</button>
+          <button class="new-button" id="saveHistoryConversations" type="submit">保存到这段历史</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="history-toast" id="historyToast" role="status" aria-live="polite"></div>
+
+    <script src="work-history-core.js"></script>
+    <script src="history.js"></script>
+  </body>
+</html>

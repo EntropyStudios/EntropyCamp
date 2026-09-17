@@ -1,0 +1,126 @@
+{
+  "version": 3,
+  "coordinateSystem": {
+    "canvas": {
+      "width": 1024,
+      "height": 861
+    },
+    "source": {
+      "width": 1600,
+      "height": 1346
+    },
+    "origin": "top-left",
+    "xAxis": "right",
+    "yAxis": "down",
+    "angleUnit": "degrees",
+    "positiveAngle": "clockwise in screen coordinates"
+  },
+  "legs": {
+    "front": {
+      "combinedAsset": "chronophage-front-pallet-v3.webp",
+      "upper": {
+        "asset": "chronophage-front-upper-v3.webp",
+        "sourceStart": [
+          685,
+          690
+        ],
+        "sourceEnd": [
+          503,
+          870
+        ],
+        "start": [
+          438.4,
+          441.374
+        ],
+        "end": [
+          321.92,
+          556.516
+        ]
+      },
+      "lower": {
+        "asset": "chronophage-front-lower-v3.webp",
+        "sourceStart": [
+          503,
+          870
+        ],
+        "sourceEnd": [
+          353,
+          1150
+        ],
+        "start": [
+          321.92,
+          556.516
+        ],
+        "end": [
+          225.92,
+          735.624
+        ]
+      },
+      "palletPad": {
+        "asset": "chronophage-front-pallet-pad-v3.webp",
+        "sourceCenter": [
+          353,
+          1162
+        ],
+        "center": [
+          225.92,
+          743.3
+        ],
+        "tangentAngleDeg": -12.0
+      }
+    },
+    "rear": {
+      "combinedAsset": "chronophage-rear-pallet-v3.webp",
+      "upper": {
+        "asset": "chronophage-rear-upper-v3.webp",
+        "sourceStart": [
+          835,
+          990
+        ],
+        "sourceEnd": [
+          1025,
+          55
+        ],
+        "start": [
+          534.4,
+          633.276
+        ],
+        "end": [
+          656.0,
+          35.182
+        ]
+      },
+      "lower": {
+        "asset": "chronophage-rear-lower-v3.webp",
+        "sourceStart": [
+          1025,
+          55
+        ],
+        "sourceEnd": [
+          1040,
+          1135
+        ],
+        "start": [
+          656.0,
+          35.182
+        ],
+        "end": [
+          665.6,
+          726.029
+        ]
+      },
+      "palletPad": {
+        "asset": "chronophage-rear-pallet-pad-v3.webp",
+        "sourceCenter": [
+          1040,
+          1145
+        ],
+        "center": [
+          665.6,
+          732.426
+        ],
+        "tangentAngleDeg": 10.0
+      }
+    }
+  }
+}

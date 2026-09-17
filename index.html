@@ -1,0 +1,1546 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <title>提醒</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="corpus-clock header-clock" id="corpusClock" data-clock-skin="big-ben" data-clock-ready="false" role="group" aria-label="每日名钟">
+            <svg class="clock-skin clock-skin--corpus" id="corpusClockSkin" data-clock-id="corpus" viewBox="0 0 1024 1180" role="img" aria-labelledby="corpusClockTitle corpusClockDesc" aria-hidden="true" focusable="false">
+              <title id="corpusClockTitle">Corpus Clock 圣体钟动态模拟</title>
+              <desc id="corpusClockDesc">正视金色波纹钟盘以三圈蓝色狭缝显示北京时间的时、分、秒；顶部时间吞噬者的两只擒纵足交替锁住外圈六十齿，使齿圈每秒顺时针前进一齿。</desc>
+              <defs>
+                <radialGradient id="corpusDialMetal" cx="39%" cy="30%" r="76%">
+                  <stop offset="0%" stop-color="#fff2a7" />
+                  <stop offset="17%" stop-color="#f5cd66" />
+                  <stop offset="42%" stop-color="#bd7622" />
+                  <stop offset="69%" stop-color="#7b4211" />
+                  <stop offset="88%" stop-color="#d99b32" />
+                  <stop offset="100%" stop-color="#3a1d06" />
+                </radialGradient>
+                <linearGradient id="corpusRimMetal" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#6a360d" />
+                  <stop offset="26%" stop-color="#ffe58b" />
+                  <stop offset="51%" stop-color="#a35e17" />
+                  <stop offset="76%" stop-color="#f4ca5e" />
+                  <stop offset="100%" stop-color="#472407" />
+                </linearGradient>
+                <radialGradient id="corpusCoreMetal" cx="36%" cy="29%" r="75%">
+                  <stop offset="0%" stop-color="#fff1a2" />
+                  <stop offset="32%" stop-color="#c77d22" />
+                  <stop offset="70%" stop-color="#6b370e" />
+                  <stop offset="100%" stop-color="#241104" />
+                </radialGradient>
+                <linearGradient id="corpusPendulumMetal" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#fff0a2" />
+                  <stop offset="25%" stop-color="#b96a1a" />
+                  <stop offset="56%" stop-color="#5b2d0b" />
+                  <stop offset="82%" stop-color="#e8b746" />
+                  <stop offset="100%" stop-color="#3b1c05" />
+                </linearGradient>
+                <linearGradient id="corpusBugTorsoFade" x1="0" y1="255" x2="0" y2="565" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stop-color="#fff" />
+                  <stop offset="48%" stop-color="#fff" />
+                  <stop offset="100%" stop-color="#000" />
+                </linearGradient>
+                <filter id="corpusDialTexture" x="-20%" y="-20%" width="140%" height="140%">
+                  <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="3" seed="17" result="noise" />
+                  <feColorMatrix in="noise" type="saturate" values="0" result="monoNoise" />
+                  <feComposite in="monoNoise" in2="SourceAlpha" operator="in" result="clippedNoise" />
+                  <feBlend in="SourceGraphic" in2="clippedNoise" mode="soft-light" result="textured" />
+                  <feSpecularLighting in="noise" surfaceScale="2.2" specularConstant="0.34" specularExponent="18" lighting-color="#ffd76d" result="shine">
+                    <feDistantLight azimuth="224" elevation="52" />
+                  </feSpecularLighting>
+                  <feComposite in="shine" in2="SourceAlpha" operator="in" result="clippedShine" />
+                  <feBlend in="textured" in2="clippedShine" mode="screen" />
+                </filter>
+                <filter id="corpusLedGlow" x="-100%" y="-100%" width="300%" height="300%">
+                  <feGaussianBlur stdDeviation="5.5" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+                <filter id="corpusObjectShadow" x="-30%" y="-30%" width="160%" height="170%">
+                  <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000" flood-opacity="0.62" />
+                </filter>
+                <filter id="corpusBugShadow" x="-20%" y="-20%" width="140%" height="150%">
+                  <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000" flood-opacity="0.68" />
+                  <feDropShadow dx="0" dy="0" stdDeviation="2" flood-color="#e2bd5e" flood-opacity="0.22" />
+                </filter>
+                <clipPath id="corpusDialClip">
+                  <circle cx="512" cy="690" r="343" />
+                </clipPath>
+                <mask id="corpusBugTorsoMask" maskUnits="userSpaceOnUse" x="120" y="-50" width="790" height="650">
+                  <rect x="120" y="-50" width="790" height="650" fill="url(#corpusBugTorsoFade)" />
+                </mask>
+                <mask id="corpusContactLipMask" maskUnits="userSpaceOnUse" x="110" y="288" width="804" height="804">
+                  <rect x="110" y="288" width="804" height="804" fill="black" />
+                  <circle cx="512" cy="690" r="393" fill="white" />
+                  <circle cx="512" cy="690" r="369" fill="black" />
+                </mask>
+              </defs>
+
+              <g class="corpus-clock-art" filter="url(#corpusObjectShadow)">
+                <ellipse class="cc-ambient-glow" cx="512" cy="714" rx="394" ry="406" />
+
+                <g class="cc-pendulum" id="corpusPendulum">
+                  <path d="M512 910V1136" />
+                  <circle cx="512" cy="1046" r="78" />
+                  <circle cx="512" cy="1046" r="55" />
+                  <circle cx="486" cy="1019" r="15" />
+                  <path class="cc-pendulum-tip" d="M512 1118l18 44-18 16-18-16Z" />
+                </g>
+
+                <g class="cc-dial">
+                  <g class="cc-escape-wheel" id="corpusEscapeWheel">
+                    <circle class="cc-escape-wheel-rim" cx="512" cy="690" r="357" />
+                    <circle class="cc-wheel-witness" cx="512" cy="333" r="8" data-wheel-witness-index="0" />
+                    <g class="cc-escape-teeth" id="corpusEscapeTeeth"></g>
+                  </g>
+                  <circle class="cc-dial-base" cx="512" cy="690" r="343" />
+                  <image class="cc-dial-photo" href="assets/corpus-clock/corpus-dial-photo-v1.webp" x="169" y="347" width="686" height="686" clip-path="url(#corpusDialClip)" />
+                  <g class="cc-ripples" id="corpusRipples" clip-path="url(#corpusDialClip)"></g>
+                  <circle class="cc-dial-rim outer" cx="512" cy="690" r="341" />
+                  <circle class="cc-dial-rim second" cx="512" cy="690" r="303" />
+                  <circle class="cc-dial-rim minute" cx="512" cy="690" r="244" />
+                  <circle class="cc-dial-rim hour" cx="512" cy="690" r="178" />
+
+                  <g class="cc-slots cc-hour-slots" id="corpusHourRing"></g>
+                  <g class="cc-slots cc-minute-slots" id="corpusMinuteRing"></g>
+                  <g class="cc-slots cc-second-slots" id="corpusSecondRing"></g>
+
+                  <circle class="cc-core-ring" cx="512" cy="690" r="106" />
+                  <circle class="cc-core" cx="512" cy="690" r="67" />
+                  <path class="cc-core-spiral" d="M456 690c0-43 39-72 79-56 37 15 47 64 16 91-27 24-69 12-77-20-6-24 11-46 34-48 18-2 34 10 36 27 2 13-6 25-18 29" />
+                </g>
+
+                <g class="cc-pallet cc-pallet-rear" id="chronoRearPallet" filter="url(#corpusBugShadow)">
+                  <g class="cc-pallet-photo-cover" id="chronoRearPhotoCover">
+                    <image href="assets/corpus-clock/chronophage-rear-cover-v4.webp" x="0" y="0" width="1024" height="861" />
+                  </g>
+                </g>
+
+                <g class="cc-chronophage" id="chronophage" filter="url(#corpusBugShadow)">
+                  <image class="cc-bug-passive" href="assets/corpus-clock/chronophage-passive-v4.webp" x="242" y="-25" width="500" height="420" preserveAspectRatio="none" />
+                  <image class="cc-bug-body" href="assets/corpus-clock/chronophage-torso-v4.webp" x="242" y="-25" width="500" height="420" preserveAspectRatio="none" />
+                  <g class="cc-bug-jaw" id="chronoMouth">
+                    <image href="assets/corpus-clock/chronophage-jaw-v4.webp" x="242" y="-25" width="500" height="420" preserveAspectRatio="none" />
+                  </g>
+                  <circle class="cc-eye-halo" cx="345.5" cy="140.9" r="9" />
+                  <circle class="cc-eye-pupil" cx="345.5" cy="140.9" r="4.2" />
+                  <path class="cc-eye-lid" id="chronoLid" d="M336.5 138.8q9-9 18 0q-9 5.5-18 0Z" />
+                  <path class="cc-tail-sting" id="chronoTail" d="M681.6 328.5c31.3-14.6 52.1-39.5 66.7-74.9-4.9 33.3-2.1 58.9 11.1 79.7" />
+                </g>
+
+                <g class="cc-pallet cc-pallet-front" id="chronoFrontPallet" filter="url(#corpusBugShadow)">
+                  <g class="cc-pallet-photo-cover" id="chronoFrontPhotoCover">
+                    <image href="assets/corpus-clock/chronophage-front-cover-v4.webp" x="0" y="0" width="1024" height="861" />
+                  </g>
+                </g>
+
+                <g class="cc-contact-tooth-lips" id="corpusContactToothLips" mask="url(#corpusContactLipMask)" aria-hidden="true">
+                  <g class="cc-contact-lip-pair" id="corpusFrontContactLips"><path /></g>
+                  <g class="cc-contact-lip-pair" id="corpusRearContactLips"><path /></g>
+                </g>
+
+                <path class="cc-glass-highlight" d="M277 485c53-101 150-155 253-160 71-3 138 18 196 60" />
+                <path class="cc-glass-highlight secondary" d="M308 904c68 75 157 112 258 102" />
+              </g>
+              <text class="corpus-clock-time" x="512" y="1164">MUNDUS TRANSIT</text>
+            </svg>
+
+            <svg class="clock-skin clock-skin--big-ben is-active" id="bigBenClock" data-clock-id="big-ben" viewBox="0 0 1024 1180" role="img" aria-labelledby="bigBenClockTitle bigBenClockDesc" aria-hidden="false" focusable="false">
+              <title id="bigBenClockTitle">Big Ben 大本钟与伊丽莎白塔动态模拟</title>
+              <desc id="bigBenClockDesc">修复后的普鲁士蓝与金色钟面以乳白玻璃透光，时针和分针按北京时间及两秒一拍的重力擒纵走时；历史上 Ayrton Light 在天黑后、英国议会任一院开会时点亮，本应用借它映射上班状态；每刻钟以金色光波模拟威斯敏斯特钟声。</desc>
+              <defs>
+                <linearGradient id="bigBenStone" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#d5c7ab" />
+                  <stop offset="19%" stop-color="#a49378" />
+                  <stop offset="46%" stop-color="#675b4b" />
+                  <stop offset="70%" stop-color="#ae9b7c" />
+                  <stop offset="100%" stop-color="#413a32" />
+                </linearGradient>
+                <linearGradient id="bigBenStoneEdge" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#f0e2bf" />
+                  <stop offset="34%" stop-color="#a98f65" />
+                  <stop offset="72%" stop-color="#6a563d" />
+                  <stop offset="100%" stop-color="#d2bd8d" />
+                </linearGradient>
+                <linearGradient id="bigBenGilt" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#fff0a8" />
+                  <stop offset="21%" stop-color="#d8b85f" />
+                  <stop offset="47%" stop-color="#7a5620" />
+                  <stop offset="72%" stop-color="#e8cf7d" />
+                  <stop offset="100%" stop-color="#8b6428" />
+                </linearGradient>
+                <radialGradient id="bigBenOpal" cx="38%" cy="31%" r="78%">
+                  <stop offset="0%" stop-color="#fffdf1" />
+                  <stop offset="48%" stop-color="#f0eddc" />
+                  <stop offset="78%" stop-color="#d7d3c4" />
+                  <stop offset="100%" stop-color="#aaa998" />
+                </radialGradient>
+                <radialGradient id="bigBenOpalNight" cx="42%" cy="38%" r="72%">
+                  <stop offset="0%" stop-color="#fff6bf" />
+                  <stop offset="51%" stop-color="#e6d995" />
+                  <stop offset="100%" stop-color="#7e7d52" />
+                </radialGradient>
+                <radialGradient id="bigBenAyrtonLight" cx="50%" cy="43%" r="65%">
+                  <stop offset="0%" stop-color="#fff8c3" />
+                  <stop offset="35%" stop-color="#f1c965" />
+                  <stop offset="100%" stop-color="#6f4014" />
+                </radialGradient>
+                <filter id="bigBenStoneTexture" x="-15%" y="-15%" width="130%" height="130%">
+                  <feTurbulence type="fractalNoise" baseFrequency="0.019 0.055" numOctaves="3" seed="31" result="stoneNoise" />
+                  <feColorMatrix in="stoneNoise" type="saturate" values="0" result="stoneMono" />
+                  <feBlend in="SourceGraphic" in2="stoneMono" mode="soft-light" result="stoneBlend" />
+                  <feSpecularLighting in="stoneNoise" surfaceScale="1.5" specularConstant="0.22" specularExponent="14" lighting-color="#f1dfb4" result="stoneLight">
+                    <feDistantLight azimuth="226" elevation="47" />
+                  </feSpecularLighting>
+                  <feComposite in="stoneLight" in2="SourceAlpha" operator="in" result="stoneClipped" />
+                  <feBlend in="stoneBlend" in2="stoneClipped" mode="screen" />
+                </filter>
+                <filter id="bigBenObjectShadow" x="-30%" y="-24%" width="160%" height="170%">
+                  <feDropShadow dx="0" dy="18" stdDeviation="19" flood-color="#000" flood-opacity="0.7" />
+                </filter>
+                <filter id="bigBenDialGlow" x="-30%" y="-30%" width="160%" height="160%">
+                  <feGaussianBlur stdDeviation="11" result="dialBlur" />
+                  <feMerge>
+                    <feMergeNode in="dialBlur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+                <filter id="bigBenLightGlow" x="-250%" y="-250%" width="600%" height="600%">
+                  <feGaussianBlur stdDeviation="13" result="lightBlur" />
+                  <feMerge>
+                    <feMergeNode in="lightBlur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+                <clipPath id="bigBenDialClip">
+                  <circle cx="512" cy="710" r="333" />
+                </clipPath>
+                <path id="bigBenQuatrefoil" d="M0-28C16-28 17-13 14-7 20-10 34-6 34 8 34 23 18 26 10 20 13 31 4 42-8 42-22 42-28 27-23 18-34 24-48 15-46 1-45-13-29-18-20-13-25-25-14-36 0-28Z" />
+                <path id="bigBenFinial" d="M0-45l8 17-4 4 8 8-5 5 9 11H-16l9-11-5-5 8-8-4-4Z" />
+              </defs>
+
+              <g class="bb-clock-art" filter="url(#bigBenObjectShadow)">
+                <ellipse class="bb-ambient-glow" cx="512" cy="709" rx="418" ry="440" />
+                <path class="bb-tower-body" d="M93 237h838v900H93Z" />
+                <path class="bb-side-buttress left" d="M57 187h96l-9 946H68Z" />
+                <path class="bb-side-buttress right" d="M871 187h96l-11 946h-76Z" />
+                <path class="bb-buttress-highlight left" d="M79 237h24v834H82Z" />
+                <path class="bb-buttress-highlight right" d="M921 237h24l-3 834h-21Z" />
+
+                <g class="bb-pinnacles" aria-hidden="true">
+                  <path d="M65 190V89h54v101M905 190V89h54v101M132 238V154h42v84M850 238V154h42v84" />
+                  <use href="#bigBenFinial" x="92" y="92" />
+                  <use href="#bigBenFinial" x="932" y="92" />
+                  <use href="#bigBenFinial" x="153" y="157" />
+                  <use href="#bigBenFinial" x="871" y="157" />
+                </g>
+
+                <g class="bb-belfry">
+                  <path class="bb-belfry-base" d="M166 40h692v244H166Z" />
+                  <path class="bb-belfry-parapet" d="M143 217h738v79H143Z" />
+                  <g class="bb-belfry-windows">
+                    <path d="M205 198V101q31-55 62 0v97ZM284 198V101q31-55 62 0v97ZM363 198V101q31-55 62 0v97ZM442 198V101q31-55 62 0v97ZM521 198V101q31-55 62 0v97ZM600 198V101q31-55 62 0v97ZM679 198V101q31-55 62 0v97ZM758 198V101q31-55 62 0v97Z" />
+                  </g>
+                  <path class="bb-belfry-tracery" d="M181 214h662M188 233l24-18 24 18 24-18 24 18 24-18 24 18 24-18 24 18 24-18 24 18 24-18 24 18 24-18 24 18 24-18 24 18 24-18 24 18 24-18 24 18 24-18 24 18 24-18 24 18 24-18 24 18" />
+                </g>
+
+                <g class="bb-ayrton-lantern" aria-label="Ayrton Light；历史上在天黑后表示议会开会，本应用表示上班中">
+                  <path class="bb-lantern-crown" d="M480 77l32-50 32 50-8 13h-48Z" />
+                  <rect x="489" y="82" width="46" height="54" rx="11" />
+                  <circle class="bb-ayrton-light" cx="512" cy="108" r="16" />
+                  <path class="bb-lantern-stand" d="M493 139h38l11 27h-60Z" />
+                </g>
+
+                <g class="bb-shield-row" aria-hidden="true">
+                  <g transform="translate(293 279)"><path d="M-28-25h56v31c0 24-16 38-28 44C-12 44-28 30-28 6Z" /><path d="M0-22v64M-24 0h48" /></g>
+                  <g transform="translate(381 279)"><path d="M-28-25h56v31c0 24-16 38-28 44C-12 44-28 30-28 6Z" /><path d="M0-22v64M-24 0h48" /></g>
+                  <g transform="translate(469 279)"><path d="M-28-25h56v31c0 24-16 38-28 44C-12 44-28 30-28 6Z" /><path d="M0-22v64M-24 0h48" /></g>
+                  <g transform="translate(557 279)"><path d="M-28-25h56v31c0 24-16 38-28 44C-12 44-28 30-28 6Z" /><path d="M0-22v64M-24 0h48" /></g>
+                  <g transform="translate(645 279)"><path d="M-28-25h56v31c0 24-16 38-28 44C-12 44-28 30-28 6Z" /><path d="M0-22v64M-24 0h48" /></g>
+                  <g transform="translate(733 279)"><path d="M-28-25h56v31c0 24-16 38-28 44C-12 44-28 30-28 6Z" /><path d="M0-22v64M-24 0h48" /></g>
+                </g>
+
+                <g class="bb-square-frame">
+                  <rect x="132" y="326" width="760" height="760" rx="8" />
+                  <rect class="bb-square-frame-inner" x="158" y="352" width="708" height="708" />
+                  <path class="bb-spandrel-fill" d="M174 368h214L174 582ZM850 368H636l214 214ZM174 1044V830l214 214ZM850 1044V830L636 1044Z" />
+                  <g class="bb-spandrel-ornaments" aria-hidden="true">
+                    <use href="#bigBenQuatrefoil" x="241" y="437" />
+                    <use href="#bigBenQuatrefoil" x="783" y="437" />
+                    <use href="#bigBenQuatrefoil" x="241" y="977" />
+                    <use href="#bigBenQuatrefoil" x="783" y="977" />
+                    <path d="M283 374q63 34 91 97M741 374q-63 34-91 97M283 1038q63-34 91-97M741 1038q-63-34-91-97" />
+                  </g>
+                </g>
+
+                <circle class="bb-chime-halo" cx="512" cy="710" r="370" />
+                <circle class="bb-dial-outer-gilt" cx="512" cy="710" r="358" />
+                <circle class="bb-dial-blue-rim" cx="512" cy="710" r="342" />
+                <circle class="bb-opal-face" cx="512" cy="710" r="326" />
+                <g class="bb-opal-lattice" id="bigBenOpalLattice" clip-path="url(#bigBenDialClip)" aria-hidden="true"></g>
+                <circle class="bb-minute-track-outer" cx="512" cy="710" r="316" />
+                <circle class="bb-minute-track-inner" cx="512" cy="710" r="282" />
+                <circle class="bb-roman-track-inner" cx="512" cy="710" r="225" />
+                <g class="bb-minute-ticks" id="bigBenMinuteTicks" aria-hidden="true"></g>
+                <g class="bb-roman-numerals" id="bigBenRomanNumerals" aria-hidden="true"></g>
+
+                <g class="bb-hour-hand" id="bigBenHourHand">
+                  <path class="bb-hand-gilt-edge" d="M512 771l-26-40 14-22-10-28 22-168 22 168-10 28 14 22-26 40Z" />
+                  <path class="bb-hand-blue" d="M512 755l-16-27 12-19-9-27 13-150 13 150-9 27 12 19-16 27Z" />
+                  <path class="bb-hand-cutout" d="M512 681l-10-38 10-36 10 36Z" />
+                </g>
+                <g class="bb-minute-hand" id="bigBenMinuteHand">
+                  <path class="bb-hand-gilt-edge" d="M512 787l-18-38 11-24-8-30 15-291 15 291-8 30 11 24-18 38Z" />
+                  <path class="bb-hand-blue" d="M512 771l-13-25 11-22-9-30 11-267 11 267-9 30 11 22-13 25Z" />
+                  <path class="bb-hand-cutout" d="M512 628l-6-76 6-72 6 72Z" />
+                </g>
+
+                <g class="bb-center-rose" id="bigBenCenterRose">
+                  <circle cx="512" cy="710" r="44" />
+                  <path d="M512 669c10 17 23 19 38 14-7 17-4 29 10 40-19-1-29 7-31 26-12-15-25-18-41-9 5-18 0-29-17-37 18-5 26-15 25-34 6 7 11 11 16 15Z" />
+                  <circle class="bb-center-pin" cx="512" cy="710" r="11" />
+                </g>
+
+                <path class="bb-glass-highlight" d="M316 499c65-79 158-119 256-111 63 5 119 27 165 61" />
+                <path class="bb-glass-highlight secondary" d="M313 905c70 74 166 110 267 98" />
+                <g class="bb-lower-gallery" aria-hidden="true">
+                  <path d="M135 1082h754v51H135Z" />
+                  <path d="M169 1133v-39q20-38 40 0v39M235 1133v-39q20-38 40 0v39M301 1133v-39q20-38 40 0v39M367 1133v-39q20-38 40 0v39M433 1133v-39q20-38 40 0v39M499 1133v-39q20-38 40 0v39M565 1133v-39q20-38 40 0v39M631 1133v-39q20-38 40 0v39M697 1133v-39q20-38 40 0v39M763 1133v-39q20-38 40 0v39" />
+                </g>
+                <text class="bb-motto" x="512" y="1074">DOMINE SALVAM FAC REGINAM NOSTRAM VICTORIAM PRIMAM</text>
+              </g>
+            </svg>
+            <svg class="clock-skin clock-skin--prague-orloj" id="pragueOrlojClock" data-clock-id="prague-orloj" viewBox="0 0 1024 1180" role="img" aria-labelledby="pragueOrlojClockTitle pragueOrlojClockDesc" aria-hidden="true" focusable="false">
+              <title id="pragueOrlojClockTitle">Prague Orloj 布拉格天文钟动态模拟</title>
+              <desc id="pragueOrlojClockDesc">以现存布拉格天文钟的哥特外观和实测天文盘比例重建；金手与太阳标记显示北京时间，偏心黄道环、月球、月相和旧捷克时保留布拉格天文结构并每分钟推进；北京时间八点至二十三点整点模拟死神鸣铃与十二使徒巡游。</desc>
+              <defs>
+                <linearGradient id="pragueOrlojStone" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#857b6b" />
+                  <stop offset="28%" stop-color="#3e3a35" />
+                  <stop offset="57%" stop-color="#17191a" />
+                  <stop offset="82%" stop-color="#5c5448" />
+                  <stop offset="100%" stop-color="#242322" />
+                </linearGradient>
+                <linearGradient id="pragueOrlojGilt" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#fff0a5" />
+                  <stop offset="24%" stop-color="#d9b557" />
+                  <stop offset="51%" stop-color="#75501c" />
+                  <stop offset="76%" stop-color="#f0d47a" />
+                  <stop offset="100%" stop-color="#8a6024" />
+                </linearGradient>
+                <radialGradient id="pragueOrlojSky" cx="42%" cy="28%" r="82%">
+                  <stop offset="0%" stop-color="#85bcc9" />
+                  <stop offset="49%" stop-color="#39788d" />
+                  <stop offset="78%" stop-color="#1b4e61" />
+                  <stop offset="100%" stop-color="#102d38" />
+                </radialGradient>
+                <linearGradient id="pragueOrlojTwilight" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#d39a5c" />
+                  <stop offset="52%" stop-color="#a56347" />
+                  <stop offset="100%" stop-color="#51373a" />
+                </linearGradient>
+                <linearGradient id="pragueOrlojZodiacMetal" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#71899a" />
+                  <stop offset="48%" stop-color="#39566b" />
+                  <stop offset="100%" stop-color="#223642" />
+                </linearGradient>
+                <radialGradient id="pragueOrlojCalendar" cx="40%" cy="34%" r="72%">
+                  <stop offset="0%" stop-color="#b68451" />
+                  <stop offset="54%" stop-color="#76422d" />
+                  <stop offset="100%" stop-color="#2a2422" />
+                </radialGradient>
+                <radialGradient id="pragueOrlojSun" cx="38%" cy="32%" r="66%">
+                  <stop offset="0%" stop-color="#fffbd0" />
+                  <stop offset="34%" stop-color="#f5d25f" />
+                  <stop offset="100%" stop-color="#a95f1e" />
+                </radialGradient>
+                <linearGradient id="pragueOrlojCalendarStone" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#a69d88" />
+                  <stop offset="24%" stop-color="#4c4940" />
+                  <stop offset="52%" stop-color="#171a19" />
+                  <stop offset="77%" stop-color="#696154" />
+                  <stop offset="100%" stop-color="#242624" />
+                </linearGradient>
+                <linearGradient id="pragueOrlojWoodPurple" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#a06a64" />
+                  <stop offset="42%" stop-color="#613b3f" />
+                  <stop offset="100%" stop-color="#241e25" />
+                </linearGradient>
+                <linearGradient id="pragueOrlojWoodGreen" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#6f806c" />
+                  <stop offset="48%" stop-color="#38544b" />
+                  <stop offset="100%" stop-color="#172725" />
+                </linearGradient>
+                <linearGradient id="pragueOrlojUpperTeal" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#a0b8ad" />
+                  <stop offset="38%" stop-color="#557c72" />
+                  <stop offset="72%" stop-color="#294a45" />
+                  <stop offset="100%" stop-color="#142927" />
+                </linearGradient>
+                <linearGradient id="pragueOrlojUpperUmber" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#a77a55" />
+                  <stop offset="40%" stop-color="#68452f" />
+                  <stop offset="76%" stop-color="#3c2722" />
+                  <stop offset="100%" stop-color="#1b1515" />
+                </linearGradient>
+                <linearGradient id="pragueOrlojUpperBlue" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#6593a0" />
+                  <stop offset="45%" stop-color="#315f72" />
+                  <stop offset="100%" stop-color="#172f42" />
+                </linearGradient>
+                <linearGradient id="pragueOrlojBone" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#fff3cf" />
+                  <stop offset="42%" stop-color="#d7cfac" />
+                  <stop offset="74%" stop-color="#9b9881" />
+                  <stop offset="100%" stop-color="#5f635b" />
+                </linearGradient>
+                <radialGradient id="pragueOrlojMirrorSilver" cx="34%" cy="27%" r="76%">
+                  <stop offset="0%" stop-color="#eef5ec" />
+                  <stop offset="34%" stop-color="#a9c2c0" />
+                  <stop offset="68%" stop-color="#617d83" />
+                  <stop offset="100%" stop-color="#263c42" />
+                </radialGradient>
+                <radialGradient id="pragueOrlojLuteWood" cx="36%" cy="28%" r="78%">
+                  <stop offset="0%" stop-color="#d7a669" />
+                  <stop offset="42%" stop-color="#9a5e35" />
+                  <stop offset="78%" stop-color="#60351f" />
+                  <stop offset="100%" stop-color="#2f1a16" />
+                </radialGradient>
+                <radialGradient id="pragueOrlojCalendarGlass" cx="34%" cy="25%" r="84%">
+                  <stop offset="0%" stop-color="#fff7cf" stop-opacity="0.28" />
+                  <stop offset="34%" stop-color="#dce9de" stop-opacity="0.05" />
+                  <stop offset="75%" stop-color="#182326" stop-opacity="0.04" />
+                  <stop offset="100%" stop-color="#070b0c" stop-opacity="0.46" />
+                </radialGradient>
+                <filter id="pragueOrlojObjectShadow" x="-30%" y="-24%" width="160%" height="170%">
+                  <feDropShadow dx="0" dy="17" stdDeviation="17" flood-color="#000" flood-opacity="0.72" />
+                </filter>
+                <filter id="pragueOrlojGoldGlow" x="-160%" y="-160%" width="420%" height="420%">
+                  <feGaussianBlur stdDeviation="7" result="goldBlur" />
+                  <feMerge><feMergeNode in="goldBlur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                </filter>
+                <filter id="pragueOrlojStoneSurface" x="-8%" y="-8%" width="116%" height="116%">
+                  <feTurbulence type="fractalNoise" baseFrequency="0.018 0.052" numOctaves="2" seed="1410" result="stoneNoise" />
+                  <feColorMatrix in="stoneNoise" values="0.32 0 0 0 0.17  0 0.3 0 0 0.16  0 0 0.28 0 0.14  0 0 0 0.22 0" result="stoneGrain" />
+                  <feComposite in="stoneGrain" in2="SourceAlpha" operator="in" result="stoneTexture" />
+                  <feBlend in="SourceGraphic" in2="stoneTexture" mode="soft-light" />
+                </filter>
+                <filter id="pragueOrlojWoodRelief" x="-35%" y="-25%" width="170%" height="165%">
+                  <feTurbulence type="fractalNoise" baseFrequency="0.04 0.075" numOctaves="2" seed="1865" result="woodNoise" />
+                  <feColorMatrix in="woodNoise" values="0.24 0 0 0 0.2  0 0.2 0 0 0.16  0 0 0.18 0 0.1  0 0 0 0.18 0" result="woodGrain" />
+                  <feComposite in="woodGrain" in2="SourceAlpha" operator="in" result="woodTexture" />
+                  <feBlend in="SourceGraphic" in2="woodTexture" mode="soft-light" result="woodTextured" />
+                  <feDropShadow in="woodTextured" dx="0" dy="7" stdDeviation="5" flood-color="#070807" flood-opacity="0.74" />
+                </filter>
+                <filter id="pragueOrlojWoodReliefLower" x="-35%" y="-25%" width="170%" height="165%">
+                  <feTurbulence type="fractalNoise" baseFrequency="0.126 0.236" numOctaves="2" seed="1865" result="woodNoise" />
+                  <feColorMatrix in="woodNoise" values="0.24 0 0 0 0.2  0 0.2 0 0 0.16  0 0 0.18 0 0.1  0 0 0 0.18 0" result="woodGrain" />
+                  <feComposite in="woodGrain" in2="SourceAlpha" operator="in" result="woodTexture" />
+                  <feBlend in="SourceGraphic" in2="woodTexture" mode="soft-light" result="woodTextured" />
+                  <feDropShadow in="woodTextured" dx="0" dy="2.2" stdDeviation="1.6" flood-color="#070807" flood-opacity="0.74" />
+                </filter>
+                <clipPath id="pragueOrlojDialClip"><circle cx="512" cy="612" r="302" /></clipPath>
+                <clipPath id="pragueOrlojLeftWindowClip"><rect x="314" y="91" width="164" height="142" rx="70" /></clipPath>
+                <clipPath id="pragueOrlojRightWindowClip"><rect x="546" y="91" width="164" height="142" rx="70" /></clipPath>
+                <clipPath id="pragueOrlojCalendarArtClip"><circle cx="512" cy="1067" r="101" /></clipPath>
+              </defs>
+
+              <g class="orloj-clock-art" filter="url(#pragueOrlojObjectShadow)">
+                <path class="orloj-stone-body" d="M94 1160V300Q106 104 292 34h440q186 70 198 266v860" />
+                <g class="orloj-crown-assembly">
+                <path class="orloj-gothic-arch" d="M156 354Q177 121 357 45h310q180 76 201 309l-42 2q-18-198-171-265H369q-153 67-171 265Z" />
+                <path class="orloj-crown-tracery" d="M286 255V91l52-45 52 45v164M634 255V91l52-45 52 45v164M447 238V73l65-58 65 58v165M256 255h512M330 100l8 135M382 99l-44 136M642 99l44 136M694 100l-8 135" />
+
+                <g class="orloj-rooster" id="pragueOrlojRooster" aria-hidden="true">
+                  <path d="M485 80c-15-24-7-48 17-61 1 15 7 23 18 28 9-13 19-17 31-12-5 17-3 28 7 37l-30 23-29-2Z" />
+                  <circle cx="523" cy="55" r="4" />
+                  <path d="M497 91l-11 25M517 94l6 24M548 68l24 7-22 9" />
+                </g>
+
+                <g class="orloj-apostle-stage" aria-hidden="true">
+                  <path class="orloj-window-frame" d="M286 244V143q0-87 110-87t110 87v101ZM518 244V143q0-87 110-87t110 87v101Z" />
+                  <rect class="orloj-window-depth" x="314" y="91" width="164" height="142" rx="70" />
+                  <rect class="orloj-window-depth" x="546" y="91" width="164" height="142" rx="70" />
+                  <g clip-path="url(#pragueOrlojLeftWindowClip)"><g id="pragueOrlojLeftApostles"></g></g>
+                  <g clip-path="url(#pragueOrlojRightWindowClip)"><g id="pragueOrlojRightApostles"></g></g>
+                  <g class="orloj-shutters left" id="pragueOrlojLeftShutters"><path d="M314 91h82v142h-82Z" /><path d="M396 91h82v142h-82Z" /></g>
+                  <g class="orloj-shutters right" id="pragueOrlojRightShutters"><path d="M546 91h82v142h-82Z" /><path d="M628 91h82v142h-82Z" /></g>
+                  <path class="orloj-window-sill" d="M292 236h208v24H292ZM524 236h208v24H524Z" />
+                </g>
+                </g>
+
+                <g class="orloj-upper-mechanism">
+                <g class="orloj-astronomical-dial">
+                  <circle class="orloj-dial-stone" cx="512" cy="612" r="371" />
+                  <circle class="orloj-bezel-engraving" cx="512" cy="612" r="360" />
+                  <circle class="orloj-bezel-studs" cx="512" cy="612" r="360" pathLength="24" />
+                  <circle class="orloj-outer-bezel" cx="512" cy="612" r="350" />
+                  <g class="orloj-old-czech-ring" id="pragueOrlojOldCzechRing">
+                    <circle cx="512" cy="612" r="333" />
+                    <g class="orloj-old-czech-numerals" id="pragueOrlojOldCzechNumerals"></g>
+                  </g>
+                  <circle class="orloj-civil-band" cx="512" cy="612" r="302" />
+                  <g class="orloj-sky" clip-path="url(#pragueOrlojDialClip)">
+                    <circle class="orloj-day-sky" cx="512" cy="545" r="310" />
+                    <path class="orloj-night-sky" d="M197 615q315 245 630 0v302H197Z" />
+                    <path class="orloj-twilight left" d="M197 612q85-87 176-103 45 161 12 300-109-43-188-125Z" />
+                    <path class="orloj-twilight right" d="M827 612q-85-87-176-103-45 161-12 300 109-43 188-125Z" />
+                    <circle class="orloj-horizon" cx="512" cy="514" r="250" />
+                    <circle class="orloj-astronomical-night" cx="512" cy="563" r="154" />
+                    <circle class="orloj-equator" cx="512" cy="612" r="190" />
+                    <g class="orloj-babylonian-lines" id="pragueOrlojBabylonianLines"></g>
+                    <text class="orloj-dial-word dawn" x="344" y="700">AVRORA</text>
+                    <text class="orloj-dial-word dusk" x="680" y="700">CREPVSCVLVM</text>
+                    <text class="orloj-dial-word east" x="309" y="609">ORTVS</text>
+                    <text class="orloj-dial-word west" x="715" y="609">OCCASVS</text>
+                  </g>
+                  <g class="orloj-civil-numerals" id="pragueOrlojCivilNumerals"></g>
+
+                  <g class="orloj-zodiac" id="pragueOrlojZodiac">
+                    <circle class="orloj-zodiac-outer" cx="430.2" cy="612" r="207.5" />
+                    <circle class="orloj-zodiac-inner" cx="430.2" cy="612" r="166" />
+                    <g class="orloj-zodiac-divisions" id="pragueOrlojZodiacDivisions"></g>
+                    <g class="orloj-zodiac-glyphs" id="pragueOrlojZodiacGlyphs"></g>
+                    <g class="orloj-sidereal-star" id="pragueOrlojSiderealStar" transform="translate(512 422)">
+                      <path d="M0-17 5-5 18-5 8 3 12 16 0 9-12 16-8 3-18-5-5-5Z" />
+                    </g>
+                  </g>
+
+                  <g class="orloj-sun-hand" id="pragueOrlojSunHand">
+                    <path class="orloj-hand-shaft" d="M512 934V282" />
+                    <path class="orloj-golden-hand" d="M512 276l-11 20-18 12 11 8-22 16 6 9 29-14 5 17 8-18 24 3 3-10-24-8 14-14-7-7-18 11Z" />
+                    <circle class="orloj-hand-counterweight" cx="512" cy="892" r="22" />
+                  </g>
+                  <g class="orloj-sun-symbol" id="pragueOrlojSunSymbol">
+                    <g class="orloj-sun-rays" id="pragueOrlojSunRays">
+                      <path d="M0-35 6-18 18-31 18-12 34-18 25-3 40 5 22 11 30 27 12 21 5 39-3 21-20 30-15 11-36 6-20-4-31-19-11-18-9-37 3-22Z" />
+                    </g>
+                    <circle cx="0" cy="0" r="20" />
+                  </g>
+
+                  <g class="orloj-moon-hand" id="pragueOrlojMoonHand">
+                    <path d="M512 915V307" />
+                    <circle cx="512" cy="875" r="17" />
+                  </g>
+                  <g class="orloj-moon-symbol" id="pragueOrlojMoonSymbol">
+                    <circle class="orloj-moon-dark" cx="0" cy="0" r="24" />
+                    <path class="orloj-moon-light" id="pragueOrlojMoonLight" />
+                    <circle class="orloj-moon-rim" cx="0" cy="0" r="24" />
+                  </g>
+                  <circle class="orloj-center-hub" cx="512" cy="612" r="31" />
+                  <circle class="orloj-center-pin" cx="512" cy="612" r="9" />
+                  <path class="orloj-dial-glass-highlight" d="M281 474q121-174 316-139 92 17 153 87" />
+                </g>
+
+                <g class="orloj-upper-figure-housings" aria-hidden="true">
+                  <path class="orloj-figure-niche" d="M-4 580V341l52-82 52 82v239ZM102 580V341l52-82 52 82v239ZM808 580V341l52-82 52 82v239ZM895 580V341l52-82 52 82v239Z" />
+                  <path class="orloj-figure-niche-rib" d="M11 569V347l37-59 37 59v222M117 569V347l37-59 37 59v222M823 569V347l37-59 37 59v222M910 569V347l37-59 37 59v222" />
+                  <path class="orloj-figure-plinth" d="M-12 566h120l14 20-19 20H2l-19-20ZM94 566h120l14 20-19 20H108l-19-20ZM800 566h120l14 20-19 20H814l-19-20ZM887 566h120l14 20-19 20H901l-19-20Z" />
+                </g>
+
+                <g class="orloj-upper-figures" aria-hidden="true">
+                  <g class="orloj-figure-slot orloj-vanity-slot" transform="translate(8 248)">
+                    <g class="orloj-figure orloj-vanity">
+                      <ellipse class="orloj-wood-base" cx="61" cy="331" rx="47" ry="9" />
+                      <path class="orloj-boot" d="M36 255l25 2-3 63-34 4 7-19ZM69 257l25-1 12 62-34 4-6-37Z" />
+                      <path class="orloj-back-cloth" d="M33 114q24-21 58-4 25 26 23 82l-8 112-29 5-12-159-8 159-30-6-4-112q-2-51 10-77Z" />
+                      <path class="orloj-robe" d="M35 120q25-23 52-5 19 17 18 55l-5 87q-36 14-75 0l1-88q0-32 9-49Z" />
+                      <path class="orloj-robe-shadow" d="M70 119q30 12 31 48l-3 84-25 8-8-117Z" />
+                      <path class="orloj-vanity-collar" d="M29 116q36-25 74 0l-9 28-13-9-8 15-12-13-12 13-8-15-13 9Z" />
+                      <path class="orloj-robe-highlight" d="M46 137q20 9 39 0M42 159l-4 85M56 160l-1 92M82 158l7 88" />
+                      <path class="orloj-belt" d="M29 170q35 12 72 0l2 13q-38 12-75 0Z" />
+                      <g class="orloj-vanity-head">
+                        <path class="orloj-head" d="M44 57q4-24 25-25 25 1 29 25l-5 33-18 18-22-8-12-22Z" />
+                        <path class="orloj-hair" d="M41 59q-2-28 26-32 29 5 31 31l-10-13-39 9Z" />
+                        <path class="orloj-beard" d="M52 83q18 12 35-2l3 24-17 21-18-13Z" />
+                        <path class="orloj-face" d="M55 66l12-3m6 1 12 3M69 73l-5 9 9 2M61 91q13 8 24-1" />
+                        <path class="orloj-head-wrap" d="M36 45q6-33 34-35 30 5 36 34L91 57q-24-15-47 1Z" />
+                        <path class="orloj-head-wrap-fold" d="M43 37q25-16 52 2M50 24q22-9 43 7" />
+                        <g class="orloj-head-jewel"><circle cx="75" cy="21" r="12" /><circle cx="75" cy="21" r="5" /></g>
+                      </g>
+                      <g class="orloj-mirror">
+                        <ellipse class="orloj-mirror-rim" cx="-3" cy="74" rx="34" ry="45" />
+                        <ellipse class="orloj-mirror-face" cx="-3" cy="74" rx="25" ry="35" />
+                        <path class="orloj-mirror-glint" d="M-19 57q12-14 27-11" />
+                        <path class="orloj-mirror-handle" d="M14 111l29 48" />
+                      </g>
+                      <path class="orloj-arm" d="M37 137q-18-7-22-22M92 133q16 7 14 30" />
+                      <path class="orloj-hand" d="M12 109q9-8 17 1l-3 16-12 3-8-8ZM102 158q12-4 16 7l-8 13-13-2-4-9Z" />
+                    </g>
+                  </g>
+
+                  <g class="orloj-figure-slot orloj-miser-slot" transform="translate(102 248)">
+                    <g class="orloj-figure orloj-miser">
+                      <ellipse class="orloj-wood-base" cx="58" cy="331" rx="46" ry="9" />
+                      <path class="orloj-boot" d="M30 303l27 1 1 22-37 4ZM64 304l27-2 13 23-37 3Z" />
+                      <path class="orloj-back-cloth" d="M20 116q36-23 74 2l12 187-96 3Z" />
+                      <path class="orloj-robe" d="M24 121q34-25 66 0l8 184-78 3Z" />
+                      <path class="orloj-robe-shadow" d="M59 120q32 13 33 54l2 128-28 4-10-139Z" />
+                      <path class="orloj-chest-panel" d="M38 116h40l8 65q-25 18-52 0Z" />
+                      <g class="orloj-miser-buttons"><circle cx="58" cy="129" r="5" /><circle cx="60" cy="145" r="5" /><circle cx="62" cy="161" r="5" /></g>
+                      <path class="orloj-robe-highlight" d="M31 151q27 13 56 0M32 188l-4 104M49 188l2 108M75 185l10 108" />
+                      <path class="orloj-cape-collar" d="M22 119q35-35 73 1l-16 30q-23-18-44 0Z" />
+                      <g class="orloj-miser-head">
+                        <path class="orloj-head" d="M40 56q5-23 23-24 23 3 26 23l-7 33-17 15-20-9-9-22Z" />
+                        <path class="orloj-hair" d="M35 54q4-31 31-31 26 4 29 29l-14-11-37 8Z" />
+                        <path class="orloj-face" d="M48 63l11-3m7 1 11 4M62 69l-7 11 10 2M51 88q13 5 25-2" />
+                        <path class="orloj-miser-hat" d="M13 35q42-23 89 0l-7 14H22ZM37 31q5-27 29-28 25 3 31 29Z" />
+                      </g>
+                      <path class="orloj-arm" d="M35 143q-15 22-10 51M79 143q24 19 22 51" />
+                      <path class="orloj-hand" d="M18 191q10-8 18 0l-2 15-13 4-8-9ZM93 188q11-6 18 4l-4 15-14 1-7-10Z" />
+                      <g class="orloj-miser-props">
+                        <path class="orloj-purse" d="M5 201q22-23 44 0l-4 45q-19 12-37 0Z" />
+                        <path class="orloj-purse-tie" d="M14 200q13 9 26 0M18 215q10 7 19 0" />
+                        <path class="orloj-cane" d="M106 118q18-11 21 5-2 13-17 9l-4 190" />
+                      </g>
+                    </g>
+                  </g>
+
+                  <g class="orloj-figure-slot orloj-death-slot" transform="translate(809 246)">
+                    <g class="orloj-figure orloj-death" id="pragueOrlojDeath">
+                      <ellipse class="orloj-wood-base" cx="61" cy="333" rx="48" ry="9" />
+                      <path class="orloj-death-drape" d="M35 91q35-18 55 9l22 112-34 111-27-14 15-101-37 92-17-11 28-125Z" />
+                      <g class="orloj-death-head">
+                        <path class="orloj-skull" d="M34 47q3-31 28-35 28 3 32 34l-7 31-13 11-3 18H49l-3-18-14-12Z" />
+                        <path class="orloj-skull-shadow" d="M42 49q9-13 20-1 11-12 22 1l-5 15-13-2-4-9-5 10-13 1Z" />
+                        <path class="orloj-skull-nose" d="M62 57l-7 15h14Z" />
+                        <path class="orloj-skull-jaw" d="M44 79q18 13 37 0l-3 22q-17 10-31 0Z" />
+                        <path class="orloj-skull-teeth" d="M49 87v11M56 89v12M63 89v12M70 88v11" />
+                      </g>
+                      <path class="orloj-spine" d="M62 104v130" />
+                      <path class="orloj-clavicle" d="M29 116q33 17 66 0" />
+                      <path class="orloj-ribs" d="M38 124q24 20 48 0M34 139q28 24 56 0M33 155q29 25 58 0M36 171q26 24 52 0M42 187q20 17 40 0" />
+                      <path class="orloj-pelvis" d="M35 210q27-17 54 0l-9 34-18 8-19-9Z" />
+                      <g class="orloj-death-legs">
+                        <path class="orloj-bone" d="M48 240l-11 40M76 241l12 39M37 284l-11 39M88 284l14 39" />
+                        <circle class="orloj-joint" cx="37" cy="282" r="7" /><circle class="orloj-joint" cx="88" cy="282" r="7" />
+                        <path class="orloj-bone-foot" d="M18 321q16-4 25 6H16ZM83 327q13-11 31-3l3 7H84Z" />
+                      </g>
+                      <g class="orloj-death-arm">
+                        <path class="orloj-bone" d="M35 119Q14 99 7 70M7 67l-16-31" />
+                        <circle class="orloj-joint" cx="8" cy="69" r="6" />
+                        <path class="orloj-bell-rope" d="M-10 31v74" />
+                        <path class="orloj-rope-pull" d="M-20 102h20l4 15-14 11-14-11Z" />
+                      </g>
+                      <g class="orloj-death-hourglass-arm">
+                        <path class="orloj-bone" d="M89 119q18 20 19 45" />
+                        <circle class="orloj-joint" cx="108" cy="164" r="6" />
+                        <g class="orloj-hourglass-anchor" transform="translate(92 166)">
+                          <g class="orloj-hourglass">
+                            <path class="orloj-hourglass-frame" d="M0 0h35M0 62h35M4 0v62M31 0v62" />
+                            <path class="orloj-hourglass-glass" d="M7 7h21q0 16-10 24 10 8 10 24H7q0-16 10-24Q7 23 7 7Z" />
+                            <path class="orloj-hourglass-sand" d="M10 10h15q-2 11-8 16-5-5-7-16ZM17 37q7 8 8 15H9q1-7 8-15Z" />
+                          </g>
+                        </g>
+                      </g>
+                    </g>
+                  </g>
+
+                  <g class="orloj-figure-slot orloj-turk-slot" transform="translate(895 246)">
+                    <g class="orloj-figure orloj-turk">
+                      <ellipse class="orloj-wood-base" cx="61" cy="332" rx="48" ry="9" />
+                      <path class="orloj-boot" d="M29 304l28 1 3 22-40 3ZM67 305l27-3 14 24-39 2Z" />
+                      <path class="orloj-back-cloth" d="M24 113q35-24 70 1l21 185-37 13-15-150-7 147-37-12Z" />
+                      <path class="orloj-turk-lower-robe" d="M30 184q35-19 69 1l10 121-34 7-12-78-5 76-36-8Z" />
+                      <path class="orloj-robe" d="M29 116q34-25 67 1l3 82q-35 22-72 1Z" />
+                      <path class="orloj-robe-shadow" d="M64 117q28 12 30 48l2 31-25 13-10-68Z" />
+                      <path class="orloj-chest-panel" d="M44 116h38l5 73q-23 14-47 1Z" />
+                      <path class="orloj-robe-highlight" d="M37 139q28 12 54-1M39 157l-3 37M55 154l3 42M80 152l8 37M38 216l-7 77M58 217l1 86M81 215l15 79" />
+                      <path class="orloj-belt" d="M28 184q36 13 72 0l2 13q-38 14-75 1Z" />
+                      <g class="orloj-turk-head">
+                        <path class="orloj-head" d="M42 57q5-25 25-27 23 3 27 25l-5 32-18 15-21-9-11-21Z" />
+                        <path class="orloj-hair" d="M39 58q0-27 27-33 28 5 31 30L83 44l-36 9Z" />
+                        <path class="orloj-beard" d="M54 82q17 11 32-3l6 22-17 20-19-10Z" />
+                        <path class="orloj-face" d="M52 65l12-3m6 1 12 3M66 70l-6 10 9 3M58 88q13 7 23-2" />
+                        <path class="orloj-turban" d="M34 48q4-37 34-39 32 4 37 39L91 61q-27-17-51 1Z" />
+                        <path class="orloj-turban-fold" d="M42 39q26-17 54 1M47 26q24-10 45 6" />
+                        <g class="orloj-head-jewel"><ellipse cx="73" cy="21" rx="12" ry="15" /><circle cx="73" cy="21" r="5" /></g>
+                      </g>
+                      <g class="orloj-turk-lute-arm">
+                        <path class="orloj-arm" d="M35 143q8 22 25 37M91 140q-10 26-25 41" />
+                        <path class="orloj-hand" d="M55 173q11-6 18 4l-6 13-14-1-5-9ZM86 164q10-7 18 2l-4 14-14 3-7-9Z" />
+                        <g class="orloj-lute">
+                          <path class="orloj-lute-body" d="M43 191q15-28 39-13 22 16 7 42-17 25-43 7-17-13-3-36Z" />
+                          <circle class="orloj-lute-sound" cx="68" cy="203" r="8" />
+                          <path class="orloj-lute-neck" d="M81 183L116 29l11 3-36 156Z" />
+                          <path class="orloj-lute-pegbox" d="M113 31l5-27 19 6-10 27Z" />
+                          <path class="orloj-lute-strings" d="M61 221L121 13M67 223L126 15M74 221L131 17" />
+                        </g>
+                      </g>
+                    </g>
+                  </g>
+                </g>
+                </g>
+
+                <g class="orloj-calendar-assembly">
+                  <path class="orloj-calendar-bridge" d="M338 965h348l24 66H314Z" />
+                  <circle class="orloj-calendar-frame" cx="512" cy="1067" r="118" />
+                  <circle class="orloj-calendar-bezel" cx="512" cy="1067" r="108" />
+                  <g class="orloj-calendar-disk" id="pragueOrlojCalendarDisk">
+                    <circle cx="512" cy="1067" r="101" />
+                    <g id="pragueOrlojCalendarMarks"></g>
+                    <circle class="orloj-calendar-inner" cx="512" cy="1067" r="49" />
+                    <g class="orloj-calendar-emblem" aria-hidden="true">
+                      <path d="M486 1045h52v54q-26 23-52 0Z" />
+                      <path d="M490 1048v-26h11v26m7 0v-36h11v36m7 0v-26h11v26M495 1088v-18q0-11 8-11t8 11v18" />
+                    </g>
+                    <image class="orloj-calendar-art" href="assets/prague-orloj/calendar-dial-v1.svg" x="411" y="966" width="202" height="202" preserveAspectRatio="xMidYMid meet" clip-path="url(#pragueOrlojCalendarArtClip)" />
+                  </g>
+                  <g class="orloj-calendar-fixed-emblem" aria-hidden="true">
+                    <circle cx="512" cy="1067" r="27" />
+                    <path class="shield" d="M498 1055h28v29q-14 13-28 0Z" />
+                    <path class="towers" d="M501 1060v-17h6v17h4v-23h6v23h4v-17h6v17Z" />
+                    <path class="gate" d="M507 1081v-10q0-7 5-7t5 7v10" />
+                  </g>
+                  <circle class="orloj-calendar-glass" cx="512" cy="1067" r="99" />
+                  <path class="orloj-calendar-glass-streak" d="M447 1019q55-49 123-21" />
+                  <g class="orloj-calendar-figure-plinths" aria-hidden="true">
+                    <path d="M329 1122h67l7 10-10 10h-61l-10-10Z" />
+                    <path d="M390 1122h69l7 10-10 10h-63l-10-10Z" />
+                    <path d="M565 1122h69l7 10-10 10h-63l-10-10Z" />
+                    <path d="M635 1122h70l7 10-10 10h-64l-10-10Z" />
+                  </g>
+                  <g class="orloj-calendar-figures" aria-hidden="true">
+                    <g class="orloj-calendar-figure-slot" transform="translate(326 989)">
+                      <g class="orloj-calendar-figure orloj-philosopher">
+                        <ellipse class="wood-base" cx="38" cy="141" rx="33" ry="7" />
+                        <path class="wood-back-cloth" d="M19 48q19-15 41-3 14 17 12 46l2 43-27 5-8-66-7 65-27-5 5-44q-3-27 9-41Z" />
+                        <path class="wood-boot" d="M19 124l17 1 1 13-23 2ZM43 125l17-1 12 14-25 1Z" />
+                        <path class="wood-robe" d="M19 52q19-17 38-3 10 13 10 34l2 45q-30 13-60 1l4-45q-1-21 6-32Z" />
+                        <path class="wood-shadow" d="M40 49q21 10 21 34l2 41-20 8-6-62Z" />
+                        <path class="wood-cape" d="M14 51q21-23 47-2l-8 22-14-8-9 12-9-10-13 8Z" />
+                        <path class="wood-trim" d="M15 80q25 13 51 0M18 104q20 10 47 0" />
+                        <path class="wood-folds" d="M22 82l-4 41M35 80l1 49M50 79l8 44M29 93q8 6 15 0" />
+                        <path class="wood-neck" d="M29 42h18v15H29Z" />
+                        <path class="wood-head" d="M25 19q3-15 16-16 15 2 17 16l-4 19-11 10-13-6-8-13Z" />
+                        <path class="wood-hair" d="M22 20q0-20 18-22 20 3 21 21l-9-9-25 7 4 28-8-10Z" />
+                        <path class="wood-beard" d="M31 33q11 9 21-1l2 17-11 13-12-8Z" />
+                        <path class="wood-hat" d="M18 8q22-16 45 0l-7 12q-17-9-32 1Z" />
+                        <g class="wood-jewel"><circle cx="27" cy="7" r="5" /><circle cx="52" cy="7" r="5" /></g>
+                        <path class="wood-face" d="M31 22l7-2m5 1 7 2M40 26l-3 6 6 1M34 38q8 5 15-1" />
+                        <path class="wood-arm" d="M22 68q-8 12-7 25M57 67q12 11 12 27" />
+                        <path class="wood-hand" d="M10 89q7-5 12 1l-2 9-8 2-5-6ZM64 91q7-5 12 1l-2 9-9 1-5-6Z" />
+                        <path class="wood-feather" d="M15 90Q-1 72-8 47q18 6 23 24Q9 62 1 55M14 87L-4 53" />
+                        <path class="wood-scroll" d="M55 91q16-8 24 3l-5 28q-11-6-22 1Z" />
+                        <path class="wood-scroll-lines" d="M59 99h13M58 105h12M57 111h10" />
+                        <path class="wood-highlight" d="M24 57q12 6 24 0M22 118l5-26M49 111l8 10" />
+                      </g>
+                    </g>
+                    <g class="orloj-calendar-figure-slot" transform="translate(384 958)">
+                      <g class="orloj-calendar-figure orloj-archangel">
+                        <ellipse class="wood-base" cx="42" cy="171" rx="34" ry="7" />
+                        <path class="wood-wing left" d="M34 58Q2 38 0 5q27 9 42 38Z" />
+                        <path class="wood-wing right" d="M49 57Q78 31 83 4 55 10 39 43Z" />
+                        <path class="wood-wing-feathers" d="M8 17q18 12 28 30M5 29q17 9 28 25M72 15Q54 27 46 48M77 27Q59 34 50 54" />
+                        <path class="wood-back-cloth" d="M24 70q18-16 38-1 11 19 8 49l7 45-29 7-7-68-8 67-28-8 7-46q-2-30 12-45Z" />
+                        <path class="wood-boot" d="M20 151h20l1 17-26 3ZM47 151h19l11 17-27 1Z" />
+                        <path class="wood-robe" d="M24 72q18-17 36-2 11 16 9 42l3 47q-28 12-58 0l4-49q-1-24 6-38Z" />
+                        <path class="wood-shadow" d="M44 69q19 11 19 36l2 49-19 9-6-71Z" />
+                        <path class="wood-cape" d="M18 73q22-20 48-1l-8 21-14-8-10 11-8-10-14 7Z" />
+                        <path class="wood-folds" d="M26 96l-5 55M39 93l1 64M55 94l9 56M25 116q16 8 34 0" />
+                        <path class="wood-gilt-hem" d="M17 151q26 10 53 0l1 10q-28 11-58 0Z" />
+                        <path class="wood-neck" d="M33 59h17v14H33Z" />
+                        <path class="wood-head" d="M29 36q2-14 13-16 14 2 15 16l-3 15-11 9-11-5-6-11Z" />
+                        <path class="wood-hair" d="M26 37q0-19 16-21 18 3 18 20l-8-8-22 8 3 23-7-9Z" />
+                        <path class="wood-face" d="M34 39l6-2m4 1 7 2M42 43l-3 5 5 2M36 51q7 4 13-1" />
+                        <path class="wood-halo" d="M24 34q18-24 37 0" />
+                        <path class="wood-arm" d="M28 88q-10 14-9 31M57 87q12 13 14 29" />
+                        <path class="wood-hand" d="M14 114q7-5 12 1l-2 9-9 2-5-6ZM67 111q7-5 12 1l-2 9-9 1-5-6Z" />
+                        <path class="wood-shield" d="M3 91q18-15 35 0v37q-18 23-35 0Z" />
+                        <path class="wood-shield-cross" d="M18 97h7v10h10v8H25v12h-7v-12H8v-8h10Z" />
+                        <path class="wood-sword" d="M69 96L79 6l7-6 3 9-15 89ZM73 23h14" />
+                        <path class="wood-highlight" d="M28 79q12 7 23 0M26 143l5-35M50 136l10 13" />
+                      </g>
+                    </g>
+                    <g class="orloj-calendar-figure-slot" transform="translate(566 989)">
+                      <g class="orloj-calendar-figure orloj-astronomer">
+                        <ellipse class="wood-base" cx="38" cy="141" rx="34" ry="7" />
+                        <path class="wood-back-cloth" d="M15 52q23-17 47 0l9 79-30 9-7-66-8 65-27-9 7-47q-2-20 9-31Z" />
+                        <path class="wood-boot" d="M18 123l18 1 1 15-24 2ZM44 124l17-1 12 15-26 2Z" />
+                        <path class="wood-robe" d="M17 54q20-18 40-2 12 15 11 38l2 40q-30 13-61 1l3-42q-1-22 5-35Z" />
+                        <path class="wood-shadow" d="M39 51q21 10 22 34l3 40-20 9-8-62Z" />
+                        <path class="wood-sash" d="M54 53q13 12 12 29L26 123l-11-14Z" />
+                        <path class="wood-trim" d="M14 83q25 13 53 0M18 105q22 10 49 0" />
+                        <path class="wood-folds" d="M21 84l-4 40M35 82l2 47M50 83l10 40M28 93q9 5 17 0" />
+                        <path class="wood-neck" d="M30 43h18v14H30Z" />
+                        <path class="wood-head" d="M25 20q3-15 16-16 16 2 18 16l-4 18-12 10-13-6-8-13Z" />
+                        <path class="wood-hair" d="M22 21q1-20 18-22 20 3 21 20l-9-9-25 8 4 27-8-10Z" />
+                        <path class="wood-beard" d="M31 34q11 9 22-1l2 16-12 13-12-8Z" />
+                        <path class="wood-hat astronomer-hat" d="M16 11q22-19 47 0l-8 14q-17-11-33 0Z" />
+                        <g class="wood-jewel"><circle cx="40" cy="8" r="7" /><circle cx="40" cy="8" r="3" /></g>
+                        <path class="wood-face" d="M31 23l7-2m5 1 7 2M40 27l-3 6 6 1M34 39q8 4 15-1" />
+                        <path class="wood-arm" d="M21 70q9-8 21-12M58 70q11-11 14-24" />
+                        <path class="wood-hand" d="M35 55q7-4 11 2l-3 8-8 1-4-6ZM65 45q7-5 12 1l-2 9-9 2-5-6Z" />
+                        <g class="wood-telescope">
+                          <path class="wood-telescope-barrel" d="M17 58L68 24l8 10-52 34Z" />
+                          <path class="wood-telescope-rim" d="M14 56l10 14M66 22l12 15M45 39l10 14" />
+                          <circle class="wood-telescope-lens" cx="75" cy="29" r="7" />
+                          <path class="wood-telescope-stand" d="M46 52l12 16M57 68l-9 64M57 68l17 59" />
+                        </g>
+                        <path class="wood-highlight" d="M22 61q13 7 25 0M20 118l5-26M48 113l9 10" />
+                      </g>
+                    </g>
+                    <g class="orloj-calendar-figure-slot" transform="translate(637 993)">
+                      <g class="orloj-calendar-figure orloj-chronicler">
+                        <ellipse class="wood-base" cx="34" cy="138" rx="32" ry="7" />
+                        <path class="wood-back-cloth" d="M12 50q22-18 45-1 12 17 10 42l5 39-28 7-7-64-8 63-27-8 6-41q-2-24 4-37Z" />
+                        <path class="wood-boot" d="M14 121l18 1 1 14-24 2ZM40 122l17-1 12 14-25 2Z" />
+                        <path class="wood-robe" d="M14 53q19-18 39-2 11 14 10 35l4 43q-29 12-60 1l3-43q-1-22 4-34Z" />
+                        <path class="wood-shadow" d="M36 50q20 10 21 33l3 41-20 9-7-61Z" />
+                        <path class="wood-cape" d="M11 52q22-22 48-1l-7 21-14-8-9 11-8-10-14 7Z" />
+                        <path class="wood-trim" d="M11 81q25 13 53 0M15 103q21 10 47 0" />
+                        <path class="wood-folds" d="M18 82l-4 40M32 80l2 46M47 81l10 39M24 92q8 5 16 0" />
+                        <path class="wood-neck" d="M27 42h17v14H27Z" />
+                        <path class="wood-head" d="M22 19q3-14 15-16 15 2 17 16l-4 18-11 9-13-6-7-12Z" />
+                        <path class="wood-hair" d="M19 20q1-19 17-22 19 3 20 20l-8-9-24 8 4 27-8-10Z" />
+                        <path class="wood-moustache" d="M31 33q7-6 11 0 5-6 11 0-5 8-11 3-6 5-11-3Z" />
+                        <path class="wood-hat chronicler-hat" d="M16 8q20-16 42 0l-5 15q-18-9-34 0Z" />
+                        <path class="wood-face" d="M28 22l7-2m5 1 7 2M37 26l-3 6 6 1M31 37q7 4 14-1" />
+                        <path class="wood-arm" d="M17 69q7 13 15 22M54 69q-6 13-13 22" />
+                        <path class="wood-hand" d="M27 85q7-5 12 1l-2 9-8 2-5-6ZM40 85q7-5 12 1l-2 9-8 2-5-6Z" />
+                        <g class="wood-book">
+                          <path class="wood-book-cover" d="M13 82q20-9 23 3 3-12 23-3v34q-20-8-23 5-3-13-23-5Z" />
+                          <path class="wood-book-pages" d="M17 87q16-6 19 3 3-9 19-3v23q-16-5-19 4-3-9-19-4Z" />
+                          <path class="wood-book-spine" d="M36 87v28" />
+                          <path class="wood-book-lines" d="M20 93h11M20 99h12M41 93h11M40 99h12" />
+                        </g>
+                        <path class="wood-highlight" d="M19 59q12 7 24 0M17 117l5-26M45 111l9 10" />
+                      </g>
+                    </g>
+                  </g>
+                  <path class="orloj-calendar-pointer" d="M512 944l-12 31h24Z" />
+                </g>
+              </g>
+            </svg>
+            <svg class="clock-skin clock-skin--bern-zytglogge" id="bernZytgloggeClock" data-clock-id="bern-zytglogge" viewBox="0 -48 1024 1288" role="img" aria-labelledby="bernZytgloggeClockTitle bernZytgloggeClockDesc" aria-hidden="true" focusable="false">
+              <title id="bernZytgloggeClockTitle">Bern Zytglogge 伯尔尼时钟塔动态模拟</title>
+              <desc id="bernZytgloggeClockDesc">依据伯尔尼时钟塔东立面的黑金主盘、较小的红蓝天文盘，以及仅位于天文盘右侧的人物阁重建；上下读时与机关按北京时间运行，黄道、月球与月相保留历史天文结构；整点前依次模拟雄鸡、七熊队、小丑与 Chronos，塔内击钟逻辑保留在报时状态中。</desc>
+              <defs>
+                <linearGradient id="bernZytgloggeSandstone" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#938d80" />
+                  <stop offset="25%" stop-color="#575957" />
+                  <stop offset="56%" stop-color="#242a2c" />
+                  <stop offset="78%" stop-color="#6d706b" />
+                  <stop offset="100%" stop-color="#303638" />
+                </linearGradient>
+                <linearGradient id="bernZytgloggeMasonryWall" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#a39e91" />
+                  <stop offset="48%" stop-color="#7e7a70" />
+                  <stop offset="100%" stop-color="#5e625f" />
+                </linearGradient>
+                <linearGradient id="bernZytgloggeUpperPlaster" x1="0" y1="0" x2="0.9" y2="1">
+                  <stop offset="0%" stop-color="#d0cec2" />
+                  <stop offset="56%" stop-color="#b7b5aa" />
+                  <stop offset="100%" stop-color="#969a96" />
+                </linearGradient>
+                <linearGradient id="bernZytgloggeQuoinStone" x1="0" y1="0" x2="1" y2="0.8">
+                  <stop offset="0%" stop-color="#aaa9a1" />
+                  <stop offset="52%" stop-color="#858986" />
+                  <stop offset="100%" stop-color="#a09f97" />
+                </linearGradient>
+                <linearGradient id="bernZytgloggeLowerPanel" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#78938a" />
+                  <stop offset="55%" stop-color="#5d7770" />
+                  <stop offset="100%" stop-color="#405953" />
+                </linearGradient>
+                <linearGradient id="bernZytgloggeFacadeDepth" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#f0eee3" stop-opacity="0.62" />
+                  <stop offset="42%" stop-color="#817d72" stop-opacity="0.04" />
+                  <stop offset="100%" stop-color="#303735" stop-opacity="0.72" />
+                </linearGradient>
+                <radialGradient id="bernZytgloggePlasterGlow" cx="42%" cy="18%" r="82%">
+                  <stop offset="0%" stop-color="#f3f0df" stop-opacity="0.42" />
+                  <stop offset="58%" stop-color="#c1bdae" stop-opacity="0.08" />
+                  <stop offset="100%" stop-color="#6d746f" stop-opacity="0.38" />
+                </radialGradient>
+                <linearGradient id="bernZytgloggeGilt" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#fff0a2" />
+                  <stop offset="23%" stop-color="#e4bd54" />
+                  <stop offset="49%" stop-color="#795019" />
+                  <stop offset="74%" stop-color="#f0d073" />
+                  <stop offset="100%" stop-color="#8e5e21" />
+                </linearGradient>
+                <linearGradient id="bernZytgloggeCopperRed" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#c46d62" />
+                  <stop offset="46%" stop-color="#8f423d" />
+                  <stop offset="100%" stop-color="#3e2829" />
+                </linearGradient>
+                <radialGradient id="bernZytgloggeBlue" cx="38%" cy="29%" r="78%">
+                  <stop offset="0%" stop-color="#729cad" />
+                  <stop offset="44%" stop-color="#365d6b" />
+                  <stop offset="100%" stop-color="#122d36" />
+                </radialGradient>
+                <linearGradient id="bernZytgloggeWoodRed" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#df6651" />
+                  <stop offset="49%" stop-color="#8f302e" />
+                  <stop offset="100%" stop-color="#3a1d22" />
+                </linearGradient>
+                <linearGradient id="bernZytgloggeWoodBlue" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#527e94" />
+                  <stop offset="52%" stop-color="#274c63" />
+                  <stop offset="100%" stop-color="#172938" />
+                </linearGradient>
+                <radialGradient id="bernZytgloggeMoon" cx="34%" cy="28%" r="76%">
+                  <stop offset="0%" stop-color="#fff3b5" />
+                  <stop offset="42%" stop-color="#c99f47" />
+                  <stop offset="100%" stop-color="#34271d" />
+                </radialGradient>
+                <filter id="bernZytgloggeStoneTexture" x="-12%" y="-12%" width="124%" height="124%">
+                  <feTurbulence type="fractalNoise" baseFrequency="0.026 0.07" numOctaves="2" seed="1530" result="noise" />
+                  <feColorMatrix in="noise" values="0.24 0 0 0 0.16  0 0.22 0 0 0.17  0 0 0.2 0 0.17  0 0 0 0.22 0" result="grain" />
+                  <feComposite in="grain" in2="SourceAlpha" operator="in" result="texture" />
+                  <feBlend in="SourceGraphic" in2="texture" mode="soft-light" />
+                </filter>
+                <filter id="bernZytgloggeWoodRelief" x="-35%" y="-30%" width="170%" height="175%">
+                  <feTurbulence type="fractalNoise" baseFrequency="0.065 0.12" numOctaves="2" seed="1405" result="noise" />
+                  <feColorMatrix in="noise" values="0.3 0 0 0 0.14  0 0.28 0 0 0.11  0 0 0.24 0 0.08  0 0 0 0.16 0" result="grain" />
+                  <feComposite in="grain" in2="SourceAlpha" operator="in" result="texture" />
+                  <feBlend in="SourceGraphic" in2="texture" mode="soft-light" result="wood" />
+                  <feDropShadow in="wood" dx="0" dy="7" stdDeviation="5" flood-color="#050707" flood-opacity="0.78" />
+                </filter>
+                <filter id="bernZytgloggeObjectShadow" x="-35%" y="-35%" width="170%" height="190%">
+                  <feDropShadow dx="0" dy="12" stdDeviation="11" flood-color="#000" flood-opacity="0.72" />
+                </filter>
+                <clipPath id="bernZytgloggeAstrolabeClip"><circle cx="350" cy="820" r="244" /></clipPath>
+                <clipPath id="bernZytgloggeBearWindowClip"><path d="M677 835h275v155H677Z" /></clipPath>
+                <clipPath id="bernZytgloggeFacadeClip"><rect x="78" y="-48" width="868" height="1288" rx="52" ry="52" /></clipPath>
+                <symbol id="bernZytgloggeBearCommanderSymbol" viewBox="0 0 80 112">
+                  <ellipse class="zyt-bear-shadow" cx="40" cy="105" rx="36" ry="6" />
+                  <path class="zyt-horse-tail" d="M63 70q16-15 13 8" />
+                  <path class="zyt-horse-body" d="M15 67q23-13 49 2l3 18q-24 12-51 0Z" />
+                  <path class="zyt-horse-neck" d="M20 73Q13 55 3 62L1 52l18 4q13 5 14 19Z" />
+                  <path class="zyt-horse-mane" d="M18 57l8 7-5 7 8 6" />
+                  <path class="zyt-horse-leg" d="M24 84l-3 20M55 85l5 19" />
+                  <circle class="zyt-bear-head" cx="43" cy="31" r="14" />
+                  <circle class="zyt-bear-ear" cx="32" cy="21" r="5" /><circle class="zyt-bear-ear" cx="54" cy="21" r="5" />
+                  <path class="zyt-bear-muzzle" d="M35 31q8-7 16 0l-2 9H37Z" />
+                  <path class="zyt-bear-coat" d="M29 44q14-10 28 0l5 31H27Z" />
+                  <path class="zyt-bear-crown" d="M31 18l5-11 7 9 7-10 6 13Z" />
+                  <path class="zyt-bear-rein" d="M32 51L12 65M55 48l15-24" />
+                </symbol>
+                <symbol id="bernZytgloggeBearDrummerSymbol" viewBox="0 0 80 112">
+                  <ellipse class="zyt-bear-shadow" cx="40" cy="105" rx="31" ry="6" />
+                  <path class="zyt-bear-body" d="M20 44q20-16 40 0l8 48-22 11-7-32-8 31-22-10Z" />
+                  <circle class="zyt-bear-head" cx="40" cy="29" r="19" />
+                  <circle class="zyt-bear-ear" cx="25" cy="16" r="7" /><circle class="zyt-bear-ear" cx="55" cy="16" r="7" />
+                  <path class="zyt-bear-muzzle" d="M29 29q11-9 22 0l-3 12H32Z" />
+                  <path class="zyt-bear-coat" d="M16 50q24 15 48 0l2 19q-26 17-52 0Z" />
+                  <circle class="zyt-bear-drum" cx="40" cy="75" r="21" />
+                  <path class="zyt-bear-drum-rim" d="M20 67h40M20 82h40" />
+                  <path class="zyt-bear-instrument" d="M17 49l22 21M63 48L41 70" />
+                </symbol>
+                <symbol id="bernZytgloggeBearPiperSymbol" viewBox="0 0 80 112">
+                  <ellipse class="zyt-bear-shadow" cx="40" cy="105" rx="31" ry="6" />
+                  <path class="zyt-bear-body" d="M19 45q21-17 42 0l6 47-21 11-8-34-8 33-21-10Z" />
+                  <circle class="zyt-bear-head" cx="40" cy="29" r="19" />
+                  <circle class="zyt-bear-ear" cx="25" cy="16" r="7" /><circle class="zyt-bear-ear" cx="55" cy="16" r="7" />
+                  <path class="zyt-bear-muzzle" d="M29 29q11-9 22 0l-3 12H32Z" />
+                  <path class="zyt-bear-coat" d="M15 51q25 15 50 0l1 18q-26 17-52 0Z" />
+                  <path class="zyt-bear-arm" d="M17 54l22 11M63 55L42 65" />
+                  <path class="zyt-bear-instrument" d="M17 64h57m-7-7v14" />
+                  <circle class="zyt-bear-pipe-hole" cx="47" cy="64" r="3" /><circle class="zyt-bear-pipe-hole" cx="57" cy="64" r="3" />
+                </symbol>
+                <symbol id="bernZytgloggeBearRunnerSymbol" viewBox="0 0 80 112">
+                  <ellipse class="zyt-bear-shadow" cx="39" cy="105" rx="34" ry="6" />
+                  <path class="zyt-bear-runner-body" d="M26 43q19-13 35 3L55 78 31 76 17 58Z" />
+                  <circle class="zyt-bear-head" cx="48" cy="29" r="18" />
+                  <circle class="zyt-bear-ear" cx="35" cy="17" r="7" /><circle class="zyt-bear-ear" cx="61" cy="18" r="7" />
+                  <path class="zyt-bear-muzzle" d="M39 29q10-8 20 1l-4 11H42Z" />
+                  <path class="zyt-bear-coat" d="M24 48q20 14 37 4l-4 18q-19 12-36-3Z" />
+                  <path class="zyt-bear-arm" d="M28 52L5 65M57 53l19 12M35 75L14 101M52 76l20 25" />
+                  <path class="zyt-bear-pouch" d="M13 58q11-5 18 4l-4 20H9Z" />
+                  <path class="zyt-bear-pouch-strap" d="M27 48L12 63" />
+                </symbol>
+                <symbol id="bernZytgloggeBearCrownedSymbol" viewBox="0 0 80 112">
+                  <ellipse class="zyt-bear-shadow" cx="40" cy="105" rx="31" ry="6" />
+                  <path class="zyt-bear-body" d="M20 45q20-17 40 0l8 47-22 11-8-35-7 34-22-10Z" />
+                  <circle class="zyt-bear-head" cx="40" cy="31" r="19" />
+                  <circle class="zyt-bear-ear" cx="25" cy="18" r="7" /><circle class="zyt-bear-ear" cx="55" cy="18" r="7" />
+                  <path class="zyt-bear-muzzle" d="M29 31q11-9 22 0l-3 12H32Z" />
+                  <path class="zyt-bear-coat" d="M17 51q23 16 46 0l3 19q-25 18-52 0Z" />
+                  <path class="zyt-bear-crown" d="M22 17l6-15 11 12L48 1l10 16Z" />
+                  <path class="zyt-bear-arm" d="M17 55L4 76M62 55l14 20" />
+                  <path class="zyt-bear-standard" d="M68 83L60 7M53 9l14-7 8 13-16 5" />
+                </symbol>
+                <symbol id="bernZytgloggeBearGuardSymbol" viewBox="0 0 80 112">
+                  <ellipse class="zyt-bear-shadow" cx="40" cy="105" rx="31" ry="6" />
+                  <path class="zyt-bear-body" d="M20 45q20-17 40 0l8 47-22 11-8-35-7 34-22-10Z" />
+                  <circle class="zyt-bear-head" cx="40" cy="30" r="20" />
+                  <circle class="zyt-bear-ear" cx="25" cy="16" r="8" /><circle class="zyt-bear-ear" cx="55" cy="16" r="8" />
+                  <path class="zyt-bear-muzzle" d="M29 30q11-10 22 0l-3 13H32Z" />
+                  <path class="zyt-bear-coat" d="M17 51q23 16 46 0l3 19q-25 18-52 0Z" />
+                  <path class="zyt-bear-arm" d="M17 55L3 79M62 54l15 23" />
+                  <path class="zyt-bear-halberd" d="M70 83L55 5m-6 12 12-16 7 19Z" />
+                </symbol>
+                <symbol id="bernZytgloggeBearShieldGuardSymbol" viewBox="0 0 80 112">
+                  <ellipse class="zyt-bear-shadow" cx="40" cy="105" rx="31" ry="6" />
+                  <path class="zyt-bear-body" d="M20 45q20-17 40 0l8 47-22 11-8-35-7 34-22-10Z" />
+                  <circle class="zyt-bear-head" cx="40" cy="30" r="20" />
+                  <circle class="zyt-bear-ear" cx="25" cy="16" r="8" /><circle class="zyt-bear-ear" cx="55" cy="16" r="8" />
+                  <path class="zyt-bear-muzzle" d="M29 30q11-10 22 0l-3 13H32Z" />
+                  <path class="zyt-bear-coat" d="M17 51q23 16 46 0l3 19q-25 18-52 0Z" />
+                  <path class="zyt-bear-arm" d="M19 56L5 79M60 54l15 16" />
+                  <path class="zyt-bear-shield" d="M42 57q18-7 31 5v29q-15 17-31 0Z" />
+                  <path class="zyt-bear-shield-mark" d="M57 64v29M47 78h21" />
+                </symbol>
+              </defs>
+
+              <g class="zyt-clock-art">
+                <path class="zyt-facade-shadow" d="M55 40h893l34 53v1000l-45 48H76l-35-48V91Z" />
+                <g class="zyt-facade-background" clip-path="url(#bernZytgloggeFacadeClip)" aria-hidden="true">
+                  <rect class="zyt-facade" x="78" y="-48" width="868" height="1288" rx="52" ry="52" />
+                  <rect class="zyt-upper-stucco" x="78" y="-48" width="868" height="678" />
+                  <path class="zyt-facade-depth" d="M78-48h868v1288H78V1158q156 42 360 36 286-9 508-118V42Q749-4 522 11 276 28 78 84Z" />
+                  <path class="zyt-lower-bay" d="M148 646H650V1240H148Z" />
+                  <g class="zyt-lower-pilasters">
+                    <rect x="148" y="646" width="24" height="594" />
+                    <rect x="626" y="646" width="24" height="594" />
+                    <path d="M138 646h44v26h-44ZM616 646h44v26h-44Z" />
+                  </g>
+                  <g class="zyt-masonry-joints">
+                    <path d="M78 704h70M650 704h296M78 786h70M650 786h296M78 868h70M650 868h296M78 950h70M650 950h296M78 1032h70M650 1032h296M78 1114h70M650 1114h296" />
+                    <path d="M112 704v82M704 704v82M846 704v82M112 868v82M704 868v82M846 868v82M112 1032v82M704 1032v82M846 1032v82" />
+                  </g>
+                  <g class="zyt-plaster-patina">
+                    <path d="M174 54q88-48 178-8 31 14 9 54-103-21-191 20Z" />
+                    <path d="M667 77q88-31 180 15l-13 82q-84-48-185-9Z" />
+                    <path d="M164 474q75-34 136 10l-20 76q-65-28-133 7Z" />
+                    <path d="M707 448q72-23 137 21l-9 86q-69-32-151-3Z" />
+                  </g>
+                  <g class="zyt-facade-quoins">
+                  <rect class="zyt-upper-quoin" x="78" y="-48" width="78" height="58" />
+                  <rect class="zyt-upper-quoin" x="882" y="-48" width="64" height="58" />
+                  <rect class="zyt-upper-quoin" x="78" y="14" width="64" height="58" />
+                  <rect class="zyt-upper-quoin" x="868" y="14" width="78" height="58" />
+                  <rect class="zyt-upper-quoin" x="78" y="76" width="78" height="58" />
+                  <rect class="zyt-upper-quoin" x="882" y="76" width="64" height="58" />
+                  <rect class="zyt-upper-quoin" x="78" y="138" width="64" height="58" />
+                  <rect class="zyt-upper-quoin" x="868" y="138" width="78" height="58" />
+                  <rect class="zyt-upper-quoin" x="78" y="200" width="78" height="58" />
+                  <rect class="zyt-upper-quoin" x="882" y="200" width="64" height="58" />
+                  <rect class="zyt-upper-quoin" x="78" y="262" width="64" height="58" />
+                  <rect class="zyt-upper-quoin" x="868" y="262" width="78" height="58" />
+                  <rect class="zyt-upper-quoin" x="78" y="324" width="78" height="58" />
+                  <rect class="zyt-upper-quoin" x="882" y="324" width="64" height="58" />
+                  <rect class="zyt-upper-quoin" x="78" y="386" width="64" height="58" />
+                  <rect class="zyt-upper-quoin" x="868" y="386" width="78" height="58" />
+                  <rect class="zyt-upper-quoin" x="78" y="448" width="78" height="58" />
+                  <rect class="zyt-upper-quoin" x="882" y="448" width="64" height="58" />
+                  <rect class="zyt-upper-quoin" x="78" y="510" width="64" height="58" />
+                  <rect class="zyt-upper-quoin" x="868" y="510" width="78" height="58" />
+                  <rect class="zyt-upper-quoin" x="78" y="572" width="78" height="48" />
+                  <rect class="zyt-upper-quoin" x="882" y="572" width="64" height="48" />
+                  </g>
+                  <g class="zyt-upper-windows">
+                    <rect x="380" y="-44" width="44" height="20" rx="4" />
+                    <rect x="600" y="-44" width="44" height="20" rx="4" />
+                    <path d="M374-22h56v4h-56ZM594-22h56v4h-56Z" />
+                  </g>
+                  <path class="zyt-upper-garland" d="M245 570q120 38 267 40 147-2 267-40M245 570l25 25M779 570l-25 25" />
+                  <path class="zyt-upper-crest" d="M512 568l25 15-8 27h-34l-8-27Z" />
+                  <path class="zyt-facade-cornice" d="M84 620H940V628H950V638H940V648H84V638H74V628H84Z" />
+                  <path class="zyt-facade-cornice-highlight" d="M84 620H940M84 638H940" />
+                </g>
+                <rect class="zyt-facade-edge" x="78" y="-48" width="868" height="1288" rx="52" ry="52" aria-hidden="true" />
+
+                <g class="zyt-layout-hans" transform="translate(145 -2) scale(.45)">
+                <g class="zyt-hans-pavilion" aria-hidden="true">
+                  <path class="zyt-pavilion-stone" d="M690 22h247l28 43-21 113H681L662 66Z" />
+                  <path class="zyt-pavilion-arch" d="M711 151V74q17-42 63-42t63 42v77M842 151V74q17-42 54-42 30 0 44 24" />
+                  <path class="zyt-big-bell" id="bernZytgloggeBell" d="M782 55q41 0 49 32l10 39H720l11-39q9-32 51-32ZM709 126h145l-11 22H720Z" />
+                  <circle class="zyt-bell-clapper" cx="782" cy="139" r="14" />
+                  <g class="zyt-quarter-bell" id="bernZytgloggeQuarterBell">
+                    <path class="zyt-quarter-bell-body" d="M782 126q25 0 31 20l7 21h-76l7-21q6-20 31-20Zm-43 41h86l-8 14h-70Z" />
+                    <circle class="zyt-quarter-bell-clapper" cx="782" cy="174" r="8" />
+                  </g>
+                  <g class="zyt-jacquemart">
+                    <path class="zyt-jacquemart-legs" d="M867 139l-8 25M898 138l11 25" />
+                    <path class="zyt-jacquemart-body" d="M856 84q29-21 55 2l-4 58-47 1Z" />
+                    <circle class="zyt-jacquemart-head" cx="885" cy="65" r="17" />
+                    <path class="zyt-jacquemart-helm" d="M866 65q5-25 20-26 17 3 20 26l-11-8-20 7Z" />
+                    <g class="zyt-jacquemart-arm" id="bernZytgloggeJacquemartArm">
+                      <path d="M902 91l39-33" />
+                      <path class="zyt-hammer" d="M936 55l17-18 16 17-20 15Z" />
+                    </g>
+                  </g>
+                </g>
+                </g>
+
+                <g class="zyt-layout-upper" transform="translate(146.6 -41.3) scale(1.05)">
+                <g class="zyt-main-clock" aria-hidden="true">
+                  <circle class="zyt-main-stone" cx="348" cy="306" r="262" />
+                  <circle class="zyt-main-black" cx="348" cy="306" r="240" />
+                  <circle class="zyt-main-gilt-ring outer" cx="348" cy="306" r="221" />
+                  <circle class="zyt-main-gilt-ring inner" cx="348" cy="306" r="126" />
+                  <g class="zyt-main-hour-marks">
+                    <text x="348" y="104">XII</text><text x="452" y="130">I</text><text x="526" y="206">II</text>
+                    <text x="549" y="315">III</text><text x="521" y="420">IV</text><text x="447" y="493">V</text>
+                    <text x="348" y="518">VI</text><text x="244" y="492">VII</text><text x="169" y="420">VIII</text>
+                    <text x="143" y="315">IX</text><text x="171" y="207">X</text><text x="246" y="131">XI</text>
+                  </g>
+                  <g class="zyt-main-quarter-marks">
+                    <text x="348" y="194">IIII</text><text x="459" y="316">I</text><text x="348" y="432">II</text><text x="236" y="316">III</text>
+                  </g>
+                  <g class="zyt-main-hour-hand" id="bernZytgloggeMainHourHand">
+                    <path class="zyt-main-rod" d="M348 469V143" />
+                    <path class="zyt-main-gold-hand" d="M348 132l-15 28 11 17-19 21 12 9 11-13 11 13 12-9-19-21 11-17Z" />
+                    <g class="zyt-main-sun-counter">
+                      <g class="zyt-main-sun-face" transform="translate(348 176)">
+                        <path d="M0-31 7-17 19-26 18-10 33-11 23 1 35 10 19 13 23 29 8 20 0 35-8 20-23 29-19 13-35 10-23 1-33-11-18-10-19-26-7-17Z" />
+                        <circle r="16" />
+                        <path class="zyt-face-line" d="M-7-3h4m6 0h4M0 1v6m-7 3q7 6 14 0" />
+                      </g>
+                    </g>
+                    <g class="zyt-main-moon-counter">
+                      <g class="zyt-main-moon-face" transform="translate(348 436)">
+                        <path d="M12-24Q-9-9 1 13q8 15 25 7Q17 33-3 30-25 26-29 3-33-20-14-33 2-43 12-24Z" />
+                        <path class="zyt-face-line" d="M0-9l6 1M2-2l5 5M0 10q7 2 11-2" />
+                      </g>
+                    </g>
+                  </g>
+                  <g class="zyt-main-minute-hand" id="bernZytgloggeMainMinuteHand">
+                    <path class="zyt-main-rod secondary" d="M193 306h310" />
+                    <path class="zyt-main-arrow" d="M506 306l-27-16 7 16-7 16Z" />
+                    <path class="zyt-main-small-hand" d="M189 306l25-14 13 14-13 14Z" />
+                  </g>
+                  <path class="zyt-center-star" d="M348 272l9 21 22-10-9 22 23 8-23 7 9 23-22-11-9 22-9-22-22 11 9-23-23-7 23-8-9-22 22 10Z" />
+                  <circle class="zyt-center-pin" cx="348" cy="306" r="12" />
+                </g>
+                </g>
+
+                <g class="zyt-layout-planets" transform="translate(96.9 187.04) scale(.86)">
+                <g class="zyt-planet-frieze" aria-hidden="true">
+                  <path class="zyt-frieze-panel" d="M92 536h519v83H92Z" />
+                  <g class="zyt-planet zyt-saturn" transform="translate(137 543)"><circle cx="0" cy="17" r="12" /><path d="M-13 34q13-12 27 0l5 31h-38Z" /><path class="zyt-planet-tool" d="M18 27l19 43M28 39q13-12 18-4" /></g>
+                  <g class="zyt-planet zyt-jupiter" transform="translate(240 543)"><circle cx="0" cy="17" r="12" /><path d="M-14 34q14-12 28 0l6 31h-40Z" /><path class="zyt-planet-tool" d="M17 31l22 4M33 21v37" /></g>
+                  <g class="zyt-planet zyt-mars" transform="translate(344 543)"><circle cx="0" cy="17" r="12" /><path d="M-14 34q14-12 28 0l6 31h-40Z" /><path class="zyt-planet-tool" d="M-26 22l10 42M-31 21h15" /></g>
+                  <g class="zyt-planet zyt-venus" transform="translate(448 543)"><circle cx="0" cy="17" r="12" /><path d="M-14 34q14-12 28 0l6 31h-40Z" /><circle class="zyt-planet-tool" cx="24" cy="44" r="9" /></g>
+                  <g class="zyt-planet zyt-mercury" transform="translate(553 543)"><circle cx="0" cy="17" r="12" /><path d="M-14 34q14-12 28 0l6 31h-40Z" /><path class="zyt-planet-tool" d="M18 24q16 17 2 38M12 26q14 2 20-7" /></g>
+                </g>
+                </g>
+
+                <g class="zyt-layout-astrolabe" transform="translate(127 308.4) scale(.78)">
+                <g class="zyt-astrolabe" aria-hidden="true">
+                  <circle class="zyt-astro-stone" cx="350" cy="820" r="287" />
+                  <circle class="zyt-astro-outer" cx="350" cy="820" r="267" />
+                  <circle class="zyt-astro-calendar" cx="350" cy="820" r="219" />
+                  <g class="zyt-calendar-disk" id="bernZytgloggeCalendarDisk">
+                    <circle cx="350" cy="820" r="197" />
+                    <path d="M350 626v28M447 652l-14 24M518 723l-24 14M544 820h-28M518 917l-24-14M447 988l-14-24M350 1014v-28M253 988l14-24M182 917l24-14M156 820h28M182 723l24 14M253 652l14 24" />
+                  </g>
+                  <g class="zyt-astro-roman">
+                    <text x="350" y="579">XII</text><text x="477" y="614">II</text><text x="558" y="707">IV</text><text x="585" y="830">VI</text>
+                    <text x="551" y="950">VIII</text><text x="468" y="1034">X</text><text x="350" y="1064">XII</text><text x="232" y="1034">II</text>
+                    <text x="149" y="950">IV</text><text x="115" y="830">VI</text><text x="142" y="707">VIII</text><text x="223" y="614">X</text>
+                  </g>
+                  <g clip-path="url(#bernZytgloggeAstrolabeClip)">
+                    <circle class="zyt-planisphere" cx="350" cy="820" r="188" />
+                    <path class="zyt-night-field" d="M163 820q187-173 374 0-187 174-374 0Z" />
+                    <path class="zyt-horizon" d="M165 820q185-108 370 0M183 768q167-74 334 0M191 874q159 75 318 0" />
+                    <path class="zyt-temporal-hours" d="M350 632v376M225 676q125 144 250 0M190 726q160 94 320 0M183 914q167-94 334 0M225 964q125-145 250 0" />
+                  </g>
+                  <g class="zyt-zodiac-ring" id="bernZytgloggeAstrolabeZodiac">
+                    <g class="zyt-zodiac-eccentric" transform="translate(0 -38)">
+                      <circle cx="350" cy="820" r="151" /><circle cx="350" cy="820" r="113" />
+                      <g class="zyt-zodiac-glyphs">
+                        <text x="350" y="681">♈︎</text><text x="416" y="699">♉︎</text><text x="466" y="750">♊︎</text><text x="486" y="825">♋︎</text>
+                        <text x="463" y="900">♌︎</text><text x="414" y="949">♍︎</text><text x="350" y="968">♎︎</text><text x="284" y="949">♏︎</text>
+                        <text x="235" y="900">♐︎</text><text x="215" y="825">♑︎</text><text x="235" y="750">♒︎</text><text x="284" y="699">♓︎</text>
+                      </g>
+                    </g>
+                  </g>
+                  <g class="zyt-sun-hand" id="bernZytgloggeSunHand">
+                    <path d="M350 1021V620" />
+                    <path class="zyt-astro-gold-hand" d="M350 615l-15 26 12 14-18 20 12 8 9-12 10 12 12-8-18-20 12-14Z" />
+                    <g class="zyt-astro-sun" id="bernZytgloggeSunSymbol" transform="translate(350 682)"><path d="M0-30 7-16 20-24 18-9 33-9 22 2 34 12 18 14 22 29 7 21 0 36-7 21-22 29-18 14-34 12-22 2-33-9-18-9-20-24-7-16Z" /><circle r="14" /></g>
+                  </g>
+                  <g class="zyt-moon-symbol" id="bernZytgloggeMoonSymbol">
+                    <path class="zyt-moon-arm" d="M350 820V699" />
+                    <circle class="zyt-moon-dark" cx="350" cy="693" r="25" />
+                    <path class="zyt-moon-light" id="bernZytgloggeMoonLight" />
+                    <circle class="zyt-moon-rim" cx="350" cy="693" r="25" />
+                  </g>
+                  <circle class="zyt-astro-hub" cx="350" cy="820" r="25" />
+                  <circle class="zyt-center-pin" cx="350" cy="820" r="8" />
+                  <path class="zyt-astro-glass" d="M176 744q81-126 229-109 76 9 132 69" />
+                  <text class="zyt-calendar-date" id="bernZytgloggeCalendarDate" x="350" y="1111">25</text>
+                </g>
+                </g>
+
+                <g class="zyt-layout-automata" transform="translate(240 464) scale(.64)">
+                <g class="zyt-automaton-pavilion" aria-hidden="true">
+                  <path class="zyt-pavilion-back" d="M641 174h337v867l-40 85H681l-40-85Z" />
+                  <path class="zyt-pavilion-ribs" d="M664 210h291M668 477h283M670 733h279M674 1011h271M667 220v802M950 220v802" />
+                  <path class="zyt-pavilion-scrolls" d="M646 194q37-40 73 0 37-40 74 0 37-40 74 0 37-40 75 0M665 493q45-32 89 0 45-32 90 0 45-32 91 0" />
+
+                  <g class="zyt-jester-stage">
+                    <path class="zyt-jester-arch" d="M681 221q63-77 126 0 63-77 126 0v212H681Z" />
+                    <path class="zyt-jester-bell left" d="M707 236q31 0 38 26l7 41h-90l8-41q6-26 37-26ZM658 303h98l-9 17h-80Z" />
+                    <path class="zyt-jester-bell right" d="M888 236q31 0 38 26l7 41h-90l8-41q6-26 37-26ZM839 303h98l-9 17h-80Z" />
+                    <g class="zyt-jester">
+                      <path class="zyt-jester-legs" d="M782 398l-25 25M813 399l25 24" />
+                      <path class="zyt-jester-shoe" d="M745 421q20-8 31 2l-7 9h-28ZM826 423q13-12 32-2l4 11h-31Z" />
+                      <path class="zyt-jester-body" d="M773 319q28-22 56 0l-3 79-50 1Z" />
+                      <circle class="zyt-jester-head" cx="801" cy="291" r="22" />
+                      <path class="zyt-jester-cap" d="M776 288q-3-31 20-37 2 20 10 26 12-20 31-8-8 21-21 26Z" />
+                      <circle class="zyt-jester-cap-bell" cx="792" cy="252" r="7" /><circle class="zyt-jester-cap-bell" cx="836" cy="269" r="7" />
+                      <path class="zyt-jester-face" d="M790 288l7-2m7 1 8 2M797 296q5 7 11 0" />
+                      <g class="zyt-jester-arm" id="bernZytgloggeJesterArm">
+                        <g class="zyt-jester-arm-left">
+                          <path d="M778 337l-64-44" />
+                          <circle class="zyt-jester-hand" cx="712" cy="292" r="9" />
+                        </g>
+                        <g class="zyt-jester-arm-right">
+                          <path d="M825 337l62-45" />
+                          <circle class="zyt-jester-hand" cx="889" cy="291" r="9" />
+                        </g>
+                      </g>
+                    </g>
+                  </g>
+
+                  <g class="zyt-chronos-stage">
+                    <path class="zyt-throne" d="M726 524h170l25 179H701Z" />
+                    <path class="zyt-throne-gilt" d="M724 523v-35h31v35M867 523v-35h31v35M741 697V568M883 697V568" />
+                    <path class="zyt-chronos-legs" d="M771 654l-10 48M837 654l16 47" />
+                    <path class="zyt-chronos-body" d="M751 558q54-37 105 1l-10 103-86 1Z" />
+                    <circle class="zyt-chronos-head" cx="805" cy="529" r="31" />
+                    <path class="zyt-chronos-hair" d="M773 527q5-39 35-39 32 5 35 39l-16-15-40 11-4 48-14-21Z" />
+                    <path class="zyt-chronos-beard" d="M783 541q23 17 44-1l5 45-27 27-25-24Z" />
+                    <path class="zyt-chronos-face" d="M791 527l8-3m5 1 9 3M801 534l-4 8 8 2" />
+                    <path class="zyt-chronos-mouth" id="bernZytgloggeChronosMouth" d="M792 548q12 7 24-1" />
+                    <g class="zyt-chronos-arm zyt-chronos-scepter-arm" id="bernZytgloggeChronosArm">
+                      <path class="zyt-chronos-scepter" d="M853 577l54-91M899 495l19-19M908 496l-16-10" />
+                    </g>
+                    <g class="zyt-chronos-hourglass-prop" id="bernZytgloggeChronosHourglass">
+                      <path class="zyt-chronos-hourglass" d="M737 568h42M737 625h42M742 568v57M774 568v57M746 575h24q0 14-12 22 12 8 12 21h-24q0-13 12-21-12-8-12-22Z" />
+                    </g>
+                  </g>
+
+                  <g class="zyt-rooster" id="bernZytgloggeRooster">
+                    <path class="zyt-rooster-tail" d="M663 604q-31-35-9-65 6 25 23 35-1-29 22-40 5 31-18 56Z" />
+                    <path class="zyt-rooster-body" d="M665 579q33-23 53 8 8 27-18 46-28 14-49-10Z" />
+                    <path class="zyt-rooster-wing" d="M671 589q25-17 39 6-10 28-38 29Z" />
+                    <circle class="zyt-rooster-head" cx="711" cy="568" r="17" />
+                    <path class="zyt-rooster-comb" d="M700 552q3-19 11-6 8-19 13-2 11-12 11 5Z" />
+                    <path class="zyt-rooster-beak" d="M725 568l24 8-22 8Z" />
+                    <path class="zyt-rooster-leg" d="M675 629l-5 21M693 631l4 20" />
+                  </g>
+                  <g class="zyt-lion" id="bernZytgloggeLion">
+                    <path class="zyt-lion-body" d="M897 573q30-20 49 8l-4 57-43-1Z" />
+                    <circle class="zyt-lion-mane" cx="916" cy="566" r="28" />
+                    <circle class="zyt-lion-head" cx="916" cy="566" r="17" />
+                    <path class="zyt-lion-face" d="M907 562h5m7 0h5M911 571q6 7 12 0" />
+                    <path class="zyt-lion-spear" d="M947 632l-10-111M932 526l9-20 10 19Z" />
+                  </g>
+
+                  <g class="zyt-bear-stage" clip-path="url(#bernZytgloggeBearWindowClip)">
+                    <path class="zyt-bear-track" d="M674 829h280v166H674Z" />
+                    <g class="zyt-bear-parade" id="bernZytgloggeBearParade">
+                      <use href="#bernZytgloggeBearCommanderSymbol" x="672" y="840" width="82" height="120" />
+                      <use href="#bernZytgloggeBearDrummerSymbol" x="744" y="842" width="82" height="116" />
+                      <use href="#bernZytgloggeBearPiperSymbol" x="816" y="842" width="82" height="116" />
+                      <use href="#bernZytgloggeBearRunnerSymbol" x="888" y="842" width="82" height="116" />
+                      <use href="#bernZytgloggeBearCrownedSymbol" x="960" y="842" width="82" height="116" />
+                      <use href="#bernZytgloggeBearGuardSymbol" x="1032" y="842" width="82" height="116" />
+                      <use href="#bernZytgloggeBearShieldGuardSymbol" x="1104" y="842" width="82" height="116" />
+                    </g>
+                  </g>
+                  <path class="zyt-bear-balcony" d="M655 979h316l-18 43H675Z" />
+                  <path class="zyt-corbel" d="M688 1020h250l-19 100H708Z" />
+                  <path class="zyt-corbel-ribs" d="M714 1031l17 78M758 1027l10 88M807 1027v91M856 1027l-11 88M904 1031l-18 78" />
+                </g>
+                </g>
+              </g>
+            </svg>
+            <time class="visually-hidden" id="corpusClockTime" aria-live="off"></time>
+            <time class="visually-hidden" id="bigBenClockTime" aria-live="off"></time>
+            <time class="visually-hidden" id="pragueOrlojClockTime" aria-live="off"></time>
+            <time class="visually-hidden" id="bernZytgloggeClockTime" aria-live="off"></time>
+            <button class="clock-skin-switch" id="clockSkinSwitch" type="button" aria-label="切换名钟" title="切换名钟">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10l-2.5-2.5M17 17H7l2.5 2.5M18 7l-1.5 1.5M6 17l1.5-1.5" /></svg>
+            </button>
+            <span class="clock-skin-caption" id="clockSkinCaption">大本钟 · 精准与公共秩序</span>
+            <span class="visually-hidden" id="clockSkinStatus" aria-live="polite"></span>
+          </div>
+          <div class="title-group">
+            <h1>提醒</h1>
+            <div class="work-summary" id="workSummary" aria-live="polite">
+              <span>未上班</span>
+              <strong>0</strong>
+              <small>次完成</small>
+            </div>
+            <div class="wall-clock" aria-label="当前北京时间">
+              <time class="wall-clock-time" id="currentTime" datetime=""></time>
+              <span class="wall-clock-date" id="currentDate"></span>
+            </div>
+            <a class="daily-quote" id="dailyQuote" href="https://hitokoto.cn/" target="_blank" rel="noreferrer" aria-live="polite">
+              <span class="daily-quote-text" id="dailyQuoteText">把眼前这一小时做好。</span>
+              <small class="daily-quote-source" id="dailyQuoteSource">本地</small>
+            </a>
+            <section class="weather-widget" id="weatherWidget" aria-label="未来一周天气">
+              <div class="weather-widget-head">
+                <span class="weather-location" id="weatherLocation">天气</span>
+                <small class="weather-status" id="weatherStatus">加载中</small>
+              </div>
+              <div class="weather-days" id="weatherDays"></div>
+            </section>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button class="work-button" id="workToggleButton" type="button">上班</button>
+          <a class="work-button link-button" href="work-log.html">日报</a>
+          <a class="work-button link-button" href="history.html">历史</a>
+          <a class="work-button link-button" href="clipboard.html">剪贴板</a>
+          <div class="feishu-quick-control" id="feishuQuickControl">
+            <button class="feishu-settings-trigger" id="feishuSettingsButton" type="button" aria-haspopup="dialog">
+              <span class="feishu-status-dot" aria-hidden="true"></span>
+              <span>飞书</span>
+            </button>
+            <label class="feishu-quick-switch" title="开启飞书提醒">
+              <input id="feishuQuickEnabled" type="checkbox" aria-label="开启飞书提醒" />
+              <span class="feishu-quick-switch-track" aria-hidden="true"></span>
+            </label>
+          </div>
+          <button class="new-button" id="newCardButton" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+            新建
+          </button>
+        </div>
+      </header>
+
+      <main>
+        <section class="card-grid card-graph" id="cardGrid" aria-label="提醒关系图" aria-live="polite"></section>
+      </main>
+    </div>
+
+    <dialog class="card-dialog" id="cardDialog">
+      <form id="cardForm">
+        <div class="dialog-header">
+          <h2 id="dialogTitle">新建提醒</h2>
+          <button class="close-button" id="closeDialogButton" type="button" aria-label="关闭">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+          </button>
+        </div>
+
+        <input id="cardId" type="hidden" />
+
+        <label class="field">
+          <span>名称</span>
+          <input id="cardTitle" maxlength="48" placeholder="例如：起来活动" required autofocus />
+        </label>
+
+        <label class="field">
+          <span>标签</span>
+          <input id="cardTag" maxlength="16" placeholder="可选" />
+        </label>
+
+        <label class="field codex-field">
+          <span>Codex 对话</span>
+          <select id="codexThread" aria-describedby="codexStatus">
+            <option value="">不关联</option>
+          </select>
+          <small class="field-status" id="codexStatus">正在读取对话…</small>
+        </label>
+
+        <fieldset class="interval-field" id="intervalField">
+          <legend>开始后，多久亮起</legend>
+          <div>
+            <input id="repeatValue" type="number" min="1" max="999" value="30" required aria-label="重复间隔数值" />
+            <select id="repeatUnit" aria-label="重复间隔单位">
+              <option value="minute">分钟</option>
+              <option value="hour">小时</option>
+              <option value="day">天</option>
+            </select>
+          </div>
+        </fieldset>
+
+        <div class="dialog-actions">
+          <button class="delete-button" id="deleteCardButton" type="button" hidden>删除</button>
+          <span></span>
+          <button class="cancel-button" id="cancelDialogButton" type="button">取消</button>
+          <button class="save-button" type="submit">保存</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="feishu-dialog" id="feishuDialog" aria-labelledby="feishuDialogTitle">
+      <form id="feishuForm">
+        <div class="feishu-dialog-head">
+          <div>
+            <span>消息通知</span>
+            <h2 id="feishuDialogTitle">飞书提醒</h2>
+            <p>任务状态变化由本地服务可靠发送，断网后会自动补发。</p>
+          </div>
+          <button class="reflection-close" id="closeFeishuDialog" type="button" aria-label="关闭飞书设置">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+          </button>
+        </div>
+
+        <div class="feishu-connection" id="feishuConnection">
+          <span class="feishu-connection-mark" aria-hidden="true"></span>
+          <div>
+            <strong id="feishuConnectionTitle">正在读取配置</strong>
+            <small id="feishuConnectionDetail">请稍候…</small>
+          </div>
+          <label class="feishu-master-switch">
+            <input id="feishuEnabled" type="checkbox" />
+            <span aria-hidden="true"></span>
+            <b>启用</b>
+          </label>
+        </div>
+
+        <section class="feishu-credentials" aria-labelledby="feishuCredentialTitle">
+          <div class="feishu-section-title">
+            <div>
+              <span>连接信息</span>
+              <h3 id="feishuCredentialTitle">自定义机器人</h3>
+            </div>
+            <small>只保存在这台电脑</small>
+          </div>
+          <label class="feishu-field">
+            <span>Webhook 地址</span>
+            <input id="feishuWebhook" type="password" autocomplete="off" spellcheck="false" placeholder="已保存时留空即可" />
+          </label>
+          <label class="feishu-field">
+            <span>签名密钥</span>
+            <input id="feishuSecret" type="password" autocomplete="off" spellcheck="false" placeholder="已保存时留空即可" />
+          </label>
+        </section>
+
+        <fieldset class="feishu-events">
+          <legend>什么时候通知</legend>
+          <label>
+            <input type="checkbox" name="feishuEvent" value="codex_completed" checked />
+            <span><strong>Codex 完成</strong><small>关联任务出现新的完整回复</small></span>
+          </label>
+          <label>
+            <input type="checkbox" name="feishuEvent" value="work_ended" checked />
+            <span><strong>下班总结</strong><small>发送工时、完成次数和今日感受</small></span>
+          </label>
+          <label>
+            <input type="checkbox" name="feishuEvent" value="work_started" />
+            <span><strong>开始上班</strong><small>确认提醒和工作计数已经启动</small></span>
+          </label>
+          <label>
+            <input type="checkbox" name="feishuEvent" value="reminder_due" />
+            <span><strong>普通提醒到点</strong><small>非 Codex 计时卡片亮起时发送</small></span>
+          </label>
+          <label>
+            <input type="checkbox" name="feishuEvent" value="card_read" />
+            <span><strong>标记已读</strong><small>卡片处理完成时同步一条状态</small></span>
+          </label>
+        </fieldset>
+
+        <div class="feishu-form-status" id="feishuFormStatus" role="status" aria-live="polite"></div>
+        <div class="feishu-dialog-actions">
+          <button class="cancel-button" id="testFeishuButton" type="button">发送测试消息</button>
+          <span></span>
+          <button class="save-button" id="saveFeishuButton" type="submit">保存设置</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="work-reflection-dialog" id="workReflectionDialog" aria-labelledby="workReflectionTitle">
+      <form id="workReflectionForm">
+        <div class="reflection-head">
+          <div>
+            <span>今日收尾</span>
+            <h2 id="workReflectionTitle">准备下班</h2>
+          </div>
+          <button class="reflection-close" id="closeWorkReflection" type="button" aria-label="继续上班" title="继续上班">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+          </button>
+        </div>
+
+        <div class="reflection-summary" aria-label="本次班次摘要">
+          <div>
+            <span>上班</span>
+            <strong id="reflectionStartedAt">--:--</strong>
+          </div>
+          <div>
+            <span>工作时长</span>
+            <strong id="reflectionDuration">00:00:00</strong>
+          </div>
+          <div>
+            <span>完成对话</span>
+            <strong><b id="reflectionCount">0</b> 次</strong>
+          </div>
+        </div>
+
+        <section class="reflection-conversations" aria-labelledby="reflectionConversationsTitle">
+          <div class="reflection-section-head">
+            <div>
+              <span>班次资料</span>
+              <h3 id="reflectionConversationsTitle">保存哪些 Codex 对话</h3>
+            </div>
+            <button class="text-button" id="toggleReflectionThreads" type="button">全选</button>
+          </div>
+          <p>历史中只保存对话引用和班次时间，不复制聊天正文。</p>
+          <div class="reflection-thread-list" id="workReflectionThreads" aria-label="选择要保存到历史的 Codex 对话"></div>
+          <small class="reflection-thread-count" id="workReflectionThreadCount">0 个对话</small>
+        </section>
+
+        <fieldset class="reflection-moods">
+          <legend>今天的状态</legend>
+          <div class="reflection-mood-grid">
+            <label style="--mood-color: #8fd1a7">
+              <input type="radio" name="workMood" value="fulfilled" />
+              <span class="mood-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 9.5 17 19 7.5" /></svg></span>
+              <strong>充实</strong>
+            </label>
+            <label style="--mood-color: #85b9ef">
+              <input type="radio" name="workMood" value="focused" />
+              <span class="mood-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" /><circle cx="12" cy="12" r="2" /></svg></span>
+              <strong>专注</strong>
+            </label>
+            <label style="--mood-color: #c7cbd1">
+              <input type="radio" name="workMood" value="steady" />
+              <span class="mood-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9h14M5 15h14" /></svg></span>
+              <strong>平稳</strong>
+            </label>
+            <label style="--mood-color: #e9bf72">
+              <input type="radio" name="workMood" value="inspired" />
+              <span class="mood-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.5 5.5L19 10l-5.5 1.5L12 17l-1.5-5.5L5 10l5.5-1.5L12 3Z" /></svg></span>
+              <strong>有灵感</strong>
+            </label>
+            <label style="--mood-color: #aa9bd1">
+              <input type="radio" name="workMood" value="tired" />
+              <span class="mood-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9h3M14 9h3M8 16h8" /></svg></span>
+              <strong>疲惫</strong>
+            </label>
+            <label style="--mood-color: #df8b83">
+              <input type="radio" name="workMood" value="stressed" />
+              <span class="mood-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8.5h2M14 8.5h2M8 17c2.2-2.1 5.8-2.1 8 0" /></svg></span>
+              <strong>有压力</strong>
+            </label>
+          </div>
+        </fieldset>
+
+        <label class="reflection-note">
+          <span>留一点想法</span>
+          <textarea id="workReflectionNote" maxlength="1600" rows="5" placeholder="今天做成了什么，卡在哪里，明天想继续什么…"></textarea>
+        </label>
+        <div class="reflection-status" id="workReflectionStatus" role="status" aria-live="polite"></div>
+        <div class="reflection-actions">
+          <button class="cancel-button" id="cancelWorkReflection" type="button">继续上班</button>
+          <button class="save-button" id="confirmWorkReflection" type="submit">保存记录并下班</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="card-order-core.js"></script>
+    <script src="work-history-core.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

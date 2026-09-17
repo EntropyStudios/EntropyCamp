@@ -1,0 +1,14 @@
+Corpus Clock reference texture
+
+Derived from Wikimedia Commons file:
+https://commons.wikimedia.org/wiki/File:Corpus_Clock_1.jpg
+
+Original author: Flickr user rayand.
+License: Creative Commons Attribution 2.0 Generic (CC BY 2.0)
+License URL: https://creativecommons.org/licenses/by/2.0/
+
+Local derivative:
+assets/corpus-clock-reference.jpg
+
+Changes made:
+cropped, resized, sharpened, contrast/color/brightness adjusted for use as a small UI texture.

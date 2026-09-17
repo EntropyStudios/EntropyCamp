@@ -1,0 +1,17 @@
+# 私有凭据与本机状态：小组件令牌、SSH 主机配置、小组件快照。
+# 绝不入库。
+private/
+
+# Python 字节码
+__pycache__/
+*.pyc
+
+# Claude Code 会话目录
+.claude/
+
+# 编辑器与系统产物
+*.swp
+.DS_Store
+
+# 本地临时截图与验收产物
+/tmp-screenshots/

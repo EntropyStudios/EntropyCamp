@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#000000" />
+    <title>日报记录</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page report-page">
+      <header class="topbar">
+        <div class="title-group">
+          <h1>日报记录</h1>
+          <div class="work-summary" id="reportSummary" aria-live="polite">
+            <span>未上班</span>
+            <strong>0</strong>
+            <small>次完成</small>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <a class="work-button link-button" id="reportBackLink" href="./">返回提醒</a>
+          <button class="new-button" id="generateReportButton" type="button">生成记录</button>
+        </div>
+      </header>
+
+      <main class="report-layout">
+        <section class="report-controls" aria-label="导出设置">
+          <div class="report-meta" id="sessionMeta">读取班次中…</div>
+
+          <label class="check-row">
+            <input id="includeProcessMessages" type="checkbox" checked />
+            <span>包含过程消息</span>
+          </label>
+
+          <div class="thread-list-header">
+            <span>选择 Codex 对话</span>
+            <button class="text-button" id="toggleSelectionButton" type="button">全选</button>
+          </div>
+          <div class="thread-list" id="threadList"></div>
+        </section>
+
+        <section class="report-output" aria-label="导出内容">
+          <div class="report-output-actions">
+            <span id="reportStatus">选择对话后生成 Markdown 或 JSON</span>
+            <div>
+              <button class="text-button" id="copyMarkdownButton" type="button">复制 Markdown</button>
+              <button class="text-button" id="downloadMarkdownButton" type="button">下载 MD</button>
+              <button class="text-button" id="downloadJsonButton" type="button">下载 JSON</button>
+            </div>
+          </div>
+          <textarea class="report-preview" id="reportPreview" spellcheck="false" readonly></textarea>
+        </section>
+      </main>
+    </div>
+
+    <script src="work-history-core.js"></script>
+    <script src="work-log.js"></script>
+  </body>
+</html>
