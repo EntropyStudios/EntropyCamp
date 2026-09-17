@@ -8,7 +8,7 @@
 
 程序根目录：`/mnt/mydisk/My_project/Entropy/EntropyCamp`。
 
-开机自启由用户级 systemd 管理，登录后自动拉起服务并打开主页：
+开机自启由用户级 systemd 管理；已开启 Linger，服务可以未登录运行。图形登录后优先在 Zen 打开主页，系统默认浏览器仍可保留 Edge：
 
 | 组件 | 路径 |
 | --- | --- |
@@ -28,7 +28,7 @@ journalctl --user -u entropycamp.service -n 80 --no-pager
 python3 run.py          # 或双击 启动提醒卡片.sh
 ```
 
-普通计时卡可以直接用浏览器打开 `index.html`；Codex 对话关联必须经 `run.py` 启动。
+完整工具需要通过本地服务访问，不再把直接打开 `index.html` 当作业务数据保存模式。
 
 ## 端口
 
@@ -40,11 +40,16 @@ python3 run.py          # 或双击 启动提醒卡片.sh
 
 ## 数据与隐私
 
-- 卡片、班次、历史、剪贴板保存在浏览器 localStorage，**各浏览器 profile 独立**。
-- 存储键沿用 `lumen-reminder-*` 前缀（`lumen-reminder-cards-v1` 等）。**改名没有动这些键**，否则会丢失既有卡片、班次与历史；将来若要迁移必须显式做向后兼容。
-- `private/` 存放小组件令牌、SSH 主机配置与小组件快照，权限 `0600`，已被 `.gitignore` 排除，不进入版本库。
+- 卡片、班次、历史、剪贴板的权威数据统一保存在 `~/.local/share/entropycamp/state.sqlite3`，所有浏览器通过本地 API 读取同一份。
+- 事务写入、持久化落盘和三方合并保护并发修改；同一字段冲突明确拒绝，编辑内容不因失败自动关闭。
+- Zen 旧数据已一次性导入：14 张卡片、13 条历史、1 条剪贴板与当前班次。原 localStorage 保留但不再作为业务主数据源。
+- 沿用原有数据键和结构。天气、短句、钟面选择等缓存 / 界面偏好仍可保存在浏览器。
+- 数据库目录 `0700`、文件 `0600`，位于网站目录之外。`private/` 凭据文件 `0600`、已排除 Git，并禁止 HTTP 静态读取；`.git/`、目录列表和后端源码也不提供。
+- 本次仅统一后端存储，未实现自动备份、跨盘备份或备份管理界面；数据库不是备份。
 - 小组件只公开 8003 的脱敏摘要，不给完整的 8765 开 Funnel。
 - 日常测试打开主页请不要带 `widgetSource=claim`，否则会抢占 iPhone 小组件的主数据源。
+
+详细数据位置、迁移规则与接口见 [存储说明](docs/SHARED_STORAGE.md)。启动脚本已纳入 `scripts/`；执行 `sh scripts/install-launchers.sh` 安装本机副本。旧 `codex-reminder-cards` 命令兼容转向新服务。
 
 ## 功能
 
@@ -84,7 +89,8 @@ python3 run.py          # 或双击 启动提醒卡片.sh
 | 文件 | 职责 |
 | --- | --- |
 | `index.html` | 主页结构、名钟 SVG、编辑和下班反思对话框 |
-| `app.js` | localStorage、工作班次 / 计数、Codex 同步、飞书 / 小组件、图谱投影和挂载 |
+| `app.js` | 工作班次 / 计数、Codex 同步、飞书 / 小组件、图谱投影和挂载 |
+| `state_store.py`, `state-client.js` | 后端 SQLite、事务与并发合并、前端启动加载与跨浏览器同步 |
 | `styles.css` | 主页、旧卡片和二维降级、图谱 Canvas / 投影文字 / 详情浮层 |
 | `graph-3d.js` | Three.js 恒星 / 行星 / 彗星 renderer |
 | `assets/vendor/three.module.js`, `three.core.js` | 本地 Three.js r186，必须同时存在 |
@@ -103,7 +109,7 @@ python3 run.py          # 或双击 启动提醒卡片.sh
 ```bash
 node --check app.js
 node --check graph-3d.js
-/usr/bin/python3 -m unittest -q test_run.py
+/usr/bin/python3 -m unittest discover -q
 ```
 
 ## 文档

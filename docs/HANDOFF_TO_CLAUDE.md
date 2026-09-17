@@ -2,6 +2,15 @@
 
 更新时间：2026-09-17，Asia/Shanghai。本次在电脑重启后重新核对程序、服务与测试，重建已丢失的交接文档。
 
+> **2026-09-17 统一存储与修复更新（本节优先于历史描述）。**
+> 分支 `feature/shared-sqlite-storage`：静态 HTTP 已禁止 private / .git / 后端源码及目录列表；
+> 开机启动器优先 Zen，旧 CLI 兼容新服务，安装源脚本在 scripts/。
+> 四个页面的业务数据已统一到 `~/.local/share/entropycamp/state.sqlite3`，Zen 的
+> 14 卡片 / 13 历史 / 1 剪贴板 / 当前上班状态已导入，原 localStorage 未清除。
+> 本轮不含自动备份、跨盘备份或备份管理 UI。参阅 [统一存储说明](SHARED_STORAGE.md)。
+> 下文第 6、8、9 节关于“浏览器是业务主数据源”的描述属于历史记录，已过期。
+> 之前的 3D 多节点视觉优化尚未完整验收，这一状态不因本次存储改造而改变。
+
 > **2026-09-17 迁移已完成（由 Claude 执行）。** 程序已从
 > `~/Documents/Codex/2026-08-13/hatch-pet-home-li-codex-skills/reminder-cards-prototype`
 > 整体迁入 `/mnt/mydisk/My_project/Entropy/EntropyCamp`，**旧目录已删除**。
