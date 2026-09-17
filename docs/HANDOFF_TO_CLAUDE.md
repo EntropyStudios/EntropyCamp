@@ -2,16 +2,31 @@
 
 更新时间：2026-09-17，Asia/Shanghai。本次在电脑重启后重新核对程序、服务与测试，重建已丢失的交接文档。
 
+> **2026-09-17 迁移已完成（由 Claude 执行）。** 程序已从
+> `~/Documents/Codex/2026-08-13/hatch-pet-home-li-codex-skills/reminder-cards-prototype`
+> 整体迁入 `/mnt/mydisk/My_project/Entropy/EntropyCamp`，**旧目录已删除**。
+> 服务改名为 `entropycamp.service`，开机项改名为 `entropycamp.desktop` /
+> `open-entropycamp-page`，旧的 `codex-reminder-cards.*` 与
+> `open-reminder-cards-page` 已移除。目录现在**已经是 Git 仓库**。
+> 源码内容逐字节未变，localStorage 键仍为 `lumen-reminder-*`。
+> 下文凡提到旧路径、旧服务名或「不是 Git 仓库」的地方均已过期，
+> 以本节为准；第 2 节的 UI 需求与第 7 节的未验收风险仍然有效。
+
 ## 1. 项目与当前结论
 
 用户已确定英文项目名 **EntropyCamp**，中文对应 **星营**，项目标识可用 `entropycamp`。这是概念对应，不是把英文直译成“熵营”。用户希望未来逐步加入《星际拓荒》（Outer Wilds）的元素，但保留当前办公工具的全部功能。
 
-命名意图：Entropy 呼应信息、不确定性与秩序，Camp 是任务、模型与想法汇聚的营地。**名称已讨论确定，但代码里的“提醒 / 微光 / Lumen”、目录名、localStorage 键、systemd 服务名并未迁移。** 本轮只是重做交接文档，不负责改名或继续实现 UI。
+命名意图：Entropy 呼应信息、不确定性与秩序，Camp 是任务、模型与想法汇聚的营地。
+
+改名落地进度（2026-09-17 更新）：
+
+- 已改：目录名（`EntropyCamp`）、systemd 服务名（`entropycamp.service`）、开机项与启动器、README 品牌展示。
+- **故意未改：代码里的“提醒 / 微光 / Lumen”字样、localStorage 键（`lumen-reminder-*`）、`LUMEN_*` 环境变量、Scriptable 脚本名 `LumenToday`。** 这些改动会丢失用户既有卡片、班次与历史，或打断已安装的 iPhone 小组件；若要迁移必须显式做向后兼容，不能顺手改。
 
 真实程序根目录：
 
 ```text
-/home/li/Documents/Codex/2026-08-13/hatch-pet-home-li-codex-skills/reminder-cards-prototype
+/mnt/mydisk/My_project/Entropy/EntropyCamp
 ```
 
 下文将这个目录简称 `APP`。不要误去 `/home/li/.codex/visualizations/...` 或 ALFA Robot 项目。
@@ -50,24 +65,28 @@
 
 原生 HTML / CSS / JavaScript + Python 标准库服务，无 React / Vite / npm 构建步骤。没有 `package.json`，不要直接按 React 项目重建。
 
-服务入口：[run.py](/home/li/Documents/Codex/2026-08-13/hatch-pet-home-li-codex-skills/reminder-cards-prototype/run.py)。
+服务入口：[run.py](../run.py)。
 
 用户级 systemd：
 
 ```text
-服务：codex-reminder-cards.service
-配置：/home/li/.config/systemd/user/codex-reminder-cards.service
+服务：entropycamp.service
+配置：/home/li/.config/systemd/user/entropycamp.service
 ExecStart：/usr/bin/python3 -B APP/run.py
 WorkingDirectory：APP
 ```
 
+程序现在位于第二块盘 `/mnt/mydisk`（fstab UUID 挂载，`mnt-mydisk.mount`）。
+正常开机顺序下该挂载早于用户会话；unit 里放宽的重启上限
+（`StartLimitBurst=20` / `RestartSec=3`）只是对挂载迟到的兜底。
+
 本次确认服务在 13:26:19 随重启恢复，active 且 enabled。服务解释器 `/usr/bin/python3` 是 Python 3.10.12；Node v24.14.1，主要用于检查 / 回归测试。之前交互 shell 的 `python3` 是另一套 Python 3.11 环境，不要默认与 systemd 解释器相同。
 
 ```bash
-cd /home/li/Documents/Codex/2026-08-13/hatch-pet-home-li-codex-skills/reminder-cards-prototype
-systemctl --user status codex-reminder-cards.service
-systemctl --user restart codex-reminder-cards.service
-journalctl --user -u codex-reminder-cards.service -n 80 --no-pager
+cd /mnt/mydisk/My_project/Entropy/EntropyCamp
+systemctl --user status entropycamp.service
+systemctl --user restart entropycamp.service
+journalctl --user -u entropycamp.service -n 80 --no-pager
 ```
 
 - `127.0.0.1:8765`：完整主页、静态文件与私有桥接 API。
@@ -77,20 +96,20 @@ journalctl --user -u codex-reminder-cards.service -n 80 --no-pager
 - 已有服务运行时不要盲目额外启动 `python3 run.py`，否则自动换主页端口或 8003 冲突；`run.py` 还会尝试打开默认浏览器。
 - `启动提醒卡片.sh` 也是已有入口，不必为交接改启动机制。
 
-**当前目录及父目录不是 Git 仓库。** 本次 `git rev-parse --show-toplevel` 再次确认。`.gitignore` 并不代表有 Git；没有可 cherry-pick 的提交或可用 git diff。不要 git restore、回滚未知改动或擅自移动程序目录；service 路径依赖它。
+~~**当前目录及父目录不是 Git 仓库。**~~ **已过期：2026-09-17 迁移时已 `git init`（分支 `main`），首个提交是迁移基线。** `private/`、`__pycache__/`、`.claude/` 已被 `.gitignore` 排除，凭据不入库。现在可以正常使用 git diff / log，但仍不要在未确认的情况下 git restore 或回滚用户改动。
 
 ## 4. 现有功能与文档入口
 
-先读 [README.md](/home/li/Documents/Codex/2026-08-13/hatch-pet-home-li-codex-skills/reminder-cards-prototype/README.md)，既有提醒、上班 / 下班、计数与工作时长、日报导出、历史日历与心情备注、历史对话补选、多剪贴板、天气 / 每小时短句、名钟、飞书和小组件都保留。
+先读 [README.md](../README.md)，既有提醒、上班 / 下班、计数与工作时长、日报导出、历史日历与心情备注、历史对话补选、多剪贴板、天气 / 每小时短句、名钟、飞书和小组件都保留。
 
 README 的卡片布局说明早于新 3D 图谱，不代表 renderer 现状已经完成。既有算法与部署已记录，不要复制全文或重新发明：
 
-- [圣体钟规格](/home/li/Documents/Codex/2026-08-13/hatch-pet-home-li-codex-skills/reminder-cards-prototype/docs/corpus-clock-twin-spec.md)
-- [Big Ben 规格](/home/li/Documents/Codex/2026-08-13/hatch-pet-home-li-codex-skills/reminder-cards-prototype/docs/big-ben-clock-spec.md)
-- [Prague Orloj 规格](/home/li/Documents/Codex/2026-08-13/hatch-pet-home-li-codex-skills/reminder-cards-prototype/docs/prague-orloj-clock-spec.md)
-- [Bern Zytglogge 规格](/home/li/Documents/Codex/2026-08-13/hatch-pet-home-li-codex-skills/reminder-cards-prototype/docs/bern-zytglogge-clock-spec.md)
-- [iPhone / Funnel / SSH 部署](/home/li/Documents/Codex/2026-08-13/hatch-pet-home-li-codex-skills/reminder-cards-prototype/docs/IPHONE_WIDGET.md)
-- [圣体钟素材授权](/home/li/Documents/Codex/2026-08-13/hatch-pet-home-li-codex-skills/reminder-cards-prototype/assets/corpus-clock/attribution.md)
+- [圣体钟规格](corpus-clock-twin-spec.md)
+- [Big Ben 规格](big-ben-clock-spec.md)
+- [Prague Orloj 规格](prague-orloj-clock-spec.md)
+- [Bern Zytglogge 规格](bern-zytglogge-clock-spec.md)
+- [iPhone / Funnel / SSH 部署](IPHONE_WIDGET.md)
+- [圣体钟素材授权](../assets/corpus-clock/attribution.md)
 
 **所有可读钟面统一显示北京时间 `Asia/Shanghai`。** 这是用户明确要求，不能改成英国 / 捷克时区。
 
@@ -125,11 +144,11 @@ README 的卡片布局说明早于新 3D 图谱，不代表 renderer 现状已�
 
 已新增 `isGraphThreadActive()`，独立判断执行状态。模型筛选、modelId 和 effort 使用它；视觉 due 仍保留突出未读。
 
-入口：[app.js](/home/li/Documents/Codex/2026-08-13/hatch-pet-home-li-codex-skills/reminder-cards-prototype/app.js:3987)、`graph3DNodes()` 约 4116 行。回归测试覆盖同型号两条活动任务，其中一条未读，分别 low / max；只生成一个模型，历史 idle 型号不生成节点。
+入口：[app.js](../app.js:3987)、`graph3DNodes()` 约 4116 行。回归测试覆盖同型号两条活动任务，其中一条未读，分别 low / max；只生成一个模型，历史 idle 型号不生成节点。
 
 ### 5.3 新太阳系 renderer
 
-[graph-3d.js](/home/li/Documents/Codex/2026-08-13/hatch-pet-home-li-codex-skills/reminder-cards-prototype/graph-3d.js) 最后整体重写，不能当作旧截图版本：
+[graph-3d.js](../graph-3d.js) 最后整体重写，不能当作旧截图版本：
 
 - 模型恒星：procedural ShaderMaterial 的暖色表面、日冕、PointLight。颜色由型号种子决定，不依赖 effort。
 - 工作行星：MeshStandardMaterial + 程序生成 CanvasTexture 表面，多色系，细环显示自身 effort 颜色。
@@ -256,7 +275,7 @@ GET API：`/api/codex/threads`、`/api/codex/status`、`/api/codex/events`（SSE
 重启后实际执行：
 
 ```bash
-cd /home/li/Documents/Codex/2026-08-13/hatch-pet-home-li-codex-skills/reminder-cards-prototype
+cd /mnt/mydisk/My_project/Entropy/EntropyCamp
 node --check app.js
 node --check graph-3d.js
 /usr/bin/python3 -m unittest -q test_run.py
