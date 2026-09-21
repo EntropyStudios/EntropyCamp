@@ -15,9 +15,12 @@ const UNIT_MS = {
 };
 const cardOrderCore = window.CardOrderCore;
 const workHistoryCore = window.WorkHistoryCore;
+const planetVisualCore = window.PlanetVisualCore;
+const solarCycleCore = window.SolarCycleCore;
 const WORK_HISTORY_STORE_VERSION = workHistoryCore?.STORE_VERSION || 1;
 
 let cards = loadCards();
+let planetAssignmentsNeedSave = planetVisualCore.ensureAssignments(cards);
 let workSession = loadWorkSession();
 let workHistoryStore = loadWorkHistory();
 let codexThreads = [];
@@ -30,7 +33,9 @@ let workReflectionReturnFocus = null;
 let workReflectionPreview = false;
 let workReflectionConversationOptions = [];
 let editingCardsBase;
+let recycleSaveQueue = Promise.resolve();
 let reflectionStartedFor;
+const observedTimerDueAt = new Map();
 
 const CODEX_FALLBACK_SYNC_MS = 60 * 1000;
 const WIDGET_SNAPSHOT_SYNC_MS = 30 * 1000;
@@ -403,6 +408,20 @@ function loadCards() {
             codexToolKind: typeof card.codexToolKind === "string" ? card.codexToolKind : "",
             codexCwd: typeof card.codexCwd === "string" ? card.codexCwd : "",
             codexStatus: typeof card.codexStatus === "string" ? card.codexStatus : "unknown",
+            visualPlanetSequence: Number.isInteger(card.visualPlanetSequence) && card.visualPlanetSequence >= 0
+              ? card.visualPlanetSequence
+              : null,
+            visualPlanetKey: planetVisualCore.PLANET_KEYS.includes(card.visualPlanetKey)
+              ? card.visualPlanetKey
+              : "",
+            visualRebirthAt: Number.isFinite(card.visualRebirthAt) ? card.visualRebirthAt : null,
+            visualShatteredToken: typeof card.visualShatteredToken === "string" && card.visualShatteredToken
+              ? card.visualShatteredToken
+              : card.codexDue
+                ? `codex:${card.codexLatestTurnId || card.codexLatestCompletedAt || "due"}`
+                : (!card.codexThreadId && card.started && Number.isFinite(card.nextAt) && card.nextAt <= Date.now())
+                  ? `timer:${card.nextAt}`
+                  : "",
           }))
       : [];
   } catch {
@@ -4127,31 +4146,24 @@ function graphMarkup(sorted, now) {
 }
 
 function graph3DNodes(sorted, now = Date.now()) {
-  const activeModels = new Map();
-  sorted.forEach((card) => {
-    if (!isGraphThreadActive(card) || !card.codexModel) return;
-    if (!activeModels.has(card.codexModel)) {
-      activeModels.set(card.codexModel, {
-        id: `model:${card.codexModel}`,
-        kind: "model",
-        label: modelDisplayLabel(card.codexModel),
-        threadCount: 0,
-      });
-    }
-    activeModels.get(card.codexModel).threadCount += 1;
-  });
-  const threadNodes = sorted.map((card) => {
+  return sorted.map((card) => {
     const state = graphState(card, now);
     const active = isGraphThreadActive(card);
-    const activeModel = active && card.codexModel
-      ? activeModels.get(card.codexModel)
-      : null;
+    const working = state === "processing" || state === "countdown";
+    const completionToken = card.visualShatteredToken || (state === "due"
+      ? card.codexThreadId
+        ? `codex:${card.codexLatestTurnId || card.codexLatestCompletedAt || "due"}`
+        : `timer:${card.nextAt || "due"}`
+      : "");
+    const shattered = Boolean(completionToken);
     return {
       id: String(card.id),
       kind: "thread",
       cardId: String(card.id),
       label: card.title,
-      statusLabel: state === "due"
+      statusLabel: shattered
+        ? "已完成"
+        : state === "due"
         ? "有新回复"
         : state === "processing"
           ? "处理中"
@@ -4161,7 +4173,13 @@ function graph3DNodes(sorted, now = Date.now()) {
               ? "已暂停"
               : "保持关注",
       state,
-      modelId: activeModel?.id || null,
+      working,
+      shattered,
+      planetKey: card.visualPlanetKey,
+      planetSequence: card.visualPlanetSequence,
+      completionToken,
+      rebirthAt: Number(card.visualRebirthAt) || null,
+      modelLabel: card.codexModel ? modelDisplayLabel(card.codexModel) : "",
       effort: active ? card.codexReasoningEffort || "" : "",
       phaseLabel: graphPhaseLabel(card, state),
       phaseStartedAt: Number(card.codexActivityStartedAt) || null,
@@ -4169,15 +4187,17 @@ function graph3DNodes(sorted, now = Date.now()) {
       sourceLabel: card.codexHost && card.codexHost !== "local" ? "SSH" : "本机",
     };
   });
-  return [...activeModels.values(), ...threadNodes];
+}
+
+function graph3DSolarState(now = Date.now()) {
+  return solarCycleCore.stateForSession(workSession, now);
 }
 
 function graph3DMarkup(sorted, now) {
   return `
     <div class="graph-3d-shell" data-graph-3d-shell>
-      <canvas class="graph-3d-canvas" aria-label="3D 提醒关系图；拖动旋转，滚轮缩放，点击节点查看"></canvas>
+      <canvas class="graph-3d-canvas" aria-label="太阳系任务图；点击星球查看详情"></canvas>
       <div class="graph-3d-hud" aria-hidden="true">
-        <span>拖动旋转</span><span>滚轮缩放</span>
         <span class="graph-effort-scale"><i></i>低</span><span class="graph-effort-scale is-high"><i></i>高</span>
       </div>
       <div class="graph-3d-loading">正在建立 3D 关系图…</div>
@@ -4203,19 +4223,17 @@ function showGraphNodeInspector(node) {
     return;
   }
   inspector.hidden = false;
-  inspector.querySelector("[data-graph-inspector-kind]").textContent = node.kind === "model" ? "模型节点" : "对话节点";
+  inspector.querySelector("[data-graph-inspector-kind]").textContent = node.shattered ? "任务碎片云" : "任务星球";
   inspector.querySelector("[data-graph-inspector-title]").textContent = node.label;
-  inspector.querySelector("[data-graph-inspector-status]").textContent = node.kind === "model"
-    ? `${node.threadCount || 0} 个活跃对话`
-    : `${node.phaseLabel || node.statusLabel}${node.effort ? ` · 推理${reasoningEffortLabel(node.effort)}` : ""}${node.sourceLabel ? ` · ${node.sourceLabel}` : ""}`;
+  inspector.querySelector("[data-graph-inspector-status]").textContent = `${node.phaseLabel || node.statusLabel}${node.modelLabel ? ` · ${node.modelLabel}` : ""}${node.effort ? ` · 推理${reasoningEffortLabel(node.effort)}` : ""}${node.sourceLabel ? ` · ${node.sourceLabel}` : ""}`;
   const activate = inspector.querySelector("[data-graph-inspector-activate]");
   const edit = inspector.querySelector("[data-graph-inspector-edit]");
   const card = node.kind === "thread" ? cards.find((item) => String(item.id) === String(node.cardId)) : null;
-  activate.hidden = !card || !workSession.active;
+  activate.hidden = !card || !workSession.active || node.shattered;
   edit.hidden = !card;
   if (card) {
     activate.dataset.cardId = card.id;
-    activate.textContent = graphState(card) === "due" ? "标记已读" : "打开状态";
+    activate.textContent = graphState(card) === "idle" ? "开始计时" : "打开状态";
     edit.dataset.editCard = card.id;
   } else {
     delete activate.dataset.cardId;
@@ -4225,7 +4243,7 @@ function showGraphNodeInspector(node) {
 
 async function mountConversationGraph(sorted, now = Date.now()) {
   if (conversationGraphDisposed || grid.classList.contains("is-3d-fallback")) return;
-  const options = { nodes: graph3DNodes(sorted, now), reducedMotion: shouldReduceMotion() };
+  const options = { nodes: graph3DNodes(sorted, now), solarState: graph3DSolarState(now), reducedMotion: shouldReduceMotion() };
   conversationGraphPending = { sorted, now, ...options };
   if (conversationGraphController) {
     try {
@@ -4251,8 +4269,10 @@ async function mountConversationGraph(sorted, now = Date.now()) {
       conversationGraphController = module.createConversationGraph({
         container: shell, canvas,
         nodes: conversationGraphPending.nodes,
+        solarState: conversationGraphPending.solarState,
         reducedMotion: conversationGraphPending.reducedMotion,
         onNodeSelect: showGraphNodeInspector,
+        onNodeRecycle: recycleCompletedCard,
       });
       conversationGraphController.setActive(!document.hidden);
       shell.querySelector(".graph-3d-loading")?.remove();
@@ -4400,7 +4420,7 @@ function render(options = {}) {
   grid.classList.add("card-graph");
   grid.dataset.dueCount = String(dueCards.length);
   if (!grid.querySelector("[data-graph-3d-shell]")) grid.innerHTML = graph3DMarkup(sorted, now);
-  conversationGraphPending = { sorted, now, nodes: graph3DNodes(sorted, now), reducedMotion: shouldReduceMotion() };
+  conversationGraphPending = { sorted, now, nodes: graph3DNodes(sorted, now), solarState: graph3DSolarState(now), reducedMotion: shouldReduceMotion() };
   if (conversationGraphRenderFrame) return;
   conversationGraphRenderFrame = requestAnimationFrame(() => {
     conversationGraphRenderFrame = 0;
@@ -4417,26 +4437,40 @@ function render(options = {}) {
   });
 }
 
-function updateClocks() {
+async function updateClocks() {
   ensureDailyHeaderClock();
   updateWallClock();
   updateDailyQuote();
   updateWorkDuration();
   updateGraphRuntimeLabels();
   if (!workSession.active) return;
+  const now = Date.now();
   let needsRender = false;
+  let needsSave = false;
+  cards.forEach((card) => {
+    if (card.codexThreadId || !card.started || !Number.isFinite(card.nextAt)) return;
+    if (card.nextAt > now) {
+      observedTimerDueAt.delete(card.id);
+      return;
+    }
+    if (observedTimerDueAt.get(card.id) === card.nextAt) return;
+    observedTimerDueAt.set(card.id, card.nextAt);
+    const visualToken = `timer:${card.nextAt}`;
+    if (card.visualShatteredToken !== visualToken) {
+      card.visualShatteredToken = visualToken;
+      needsSave = true;
+    }
+    enqueueFeishuEvent("reminder_due", `reminder:${card.id}:${card.nextAt}`, {
+      cardTitle: card.title,
+    });
+    needsRender = true;
+  });
   document.querySelectorAll("[data-countdown]").forEach((element) => {
     const card = cards.find((item) => item.id === element.dataset.countdown);
     if (!card || !card.started) return;
-    if (card.nextAt <= Date.now() && !element.closest(".card").classList.contains("is-due")) {
-      enqueueFeishuEvent("reminder_due", `reminder:${card.id}:${card.nextAt}`, {
-        cardTitle: card.title,
-      });
-      needsRender = true;
-      return;
-    }
     element.textContent = formatCountdown(card.nextAt);
   });
+  if (needsSave) await saveCards();
   if (needsRender) render();
 }
 
@@ -4520,10 +4554,15 @@ async function saveCard(event) {
     codexToolKind: sameThread ? existing.codexToolKind : "",
     codexCwd: sameThread ? existing.codexCwd : "",
     codexStatus: sameThread ? existing.codexStatus : "unknown",
+    visualPlanetSequence: existing?.visualPlanetSequence ?? null,
+    visualPlanetKey: existing?.visualPlanetKey || "",
+    visualRebirthAt: existing?.visualRebirthAt || null,
+    visualShatteredToken: existing?.visualShatteredToken || "",
   };
 
   if (existing) Object.assign(existing, card);
   else cards.push(card);
+  planetVisualCore.ensureAssignments(cards);
 
   if (!await saveCards(editingCardsBase)) return;
   closeDialog();
@@ -4546,6 +4585,13 @@ async function deleteCard() {
 async function acknowledgeCard(id) {
   const card = cards.find((item) => item.id === id);
   if (!card || getCardState(card) !== "due") return;
+  const readSource = acknowledgeAndReassignCard(card);
+  if (!await saveCards()) return;
+  enqueueFeishuEvent("card_read", `read:${card.id}:${readSource}`, { cardTitle: card.title });
+  render();
+}
+
+function acknowledgeAndReassignCard(card) {
   const readSource = card.codexThreadId
     ? card.codexLatestTurnId || card.codexLastSeenTurnId || Date.now()
     : card.nextAt || Date.now();
@@ -4555,9 +4601,25 @@ async function acknowledgeCard(id) {
   } else {
     Object.assign(card, startTimer(card));
   }
-  if (!await saveCards()) return;
-  enqueueFeishuEvent("card_read", `read:${card.id}:${readSource}`, { cardTitle: card.title });
-  render();
+  planetVisualCore.assignNext(card, cards);
+  card.visualShatteredToken = "";
+  card.visualRebirthAt = Date.now();
+  return readSource;
+}
+
+function recycleCompletedCard(node) {
+  const operation = recycleSaveQueue.then(async () => {
+    const card = cards.find((item) => String(item.id) === String(node?.cardId));
+    if (!card || !card.visualShatteredToken) return false;
+    const readSource = acknowledgeAndReassignCard(card);
+    if (!await saveCards()) return false;
+    enqueueFeishuEvent("card_read", `read:${card.id}:${readSource}`, { cardTitle: card.title });
+    showGraphNodeInspector(null);
+    render();
+    return true;
+  });
+  recycleSaveQueue = operation.catch(() => false);
+  return operation;
 }
 
 function populateCodexSelect(selectedId = "", selectedHost = "local") {
@@ -4716,6 +4778,11 @@ async function applyCodexStatuses(threadStatuses = [], options = {}) {
       if (!card.codexDue || card.codexLatestTurnId !== latestTurnId) changed = true;
       card.codexDue = true;
       card.codexLatestTurnId = latestTurnId;
+      const visualToken = `codex:${latestTurnId}`;
+      if (card.visualShatteredToken !== visualToken) {
+        card.visualShatteredToken = visualToken;
+        changed = true;
+      }
     }
   });
   if (changed || workChanged) {
@@ -4827,6 +4894,18 @@ async function startWorkSession() {
     return;
   }
   renderWorkSession();
+  planetVisualCore.rerollAssignments(cards, workSession.startedAt);
+  cards.forEach((card) => {
+    card.visualShatteredToken = "";
+    card.visualRebirthAt = null;
+    if (!card.codexThreadId && getCardState(card) === "due") Object.assign(card, startTimer(card));
+  });
+  if (!await saveCards()) {
+    workSessionBusy = false;
+    renderWorkSession();
+    return;
+  }
+  render();
 
   try {
     const statuses = await fetchCodexStatusesForCards(linkedCards);
@@ -4906,6 +4985,8 @@ async function saveWorkReflection(event) {
     confirmWorkReflection.disabled = false;
     return;
   }
+  workSession = finalSession;
+  cards = finalCards;
   endWorkSession(endedAt);
   enqueueFeishuEvent("work_ended", `work-ended:${entry.id}`, {
     duration: formatWorkDuration(entry.durationMs),
@@ -5016,12 +5097,17 @@ window.addEventListener("storage", (event) => {
   }
 });
 
-businessState.subscribe(({ keys }) => {
+businessState.subscribe(async ({ keys }) => {
   if (!keys.includes(STORAGE_KEY) && !keys.includes(WORK_SESSION_KEY) && !keys.includes(WORK_HISTORY_KEY)) return;
-  if (keys.includes(STORAGE_KEY)) cards = loadCards();
+  let assignmentsChanged = false;
+  if (keys.includes(STORAGE_KEY)) {
+    cards = loadCards();
+    assignmentsChanged = planetVisualCore.ensureAssignments(cards);
+  }
   if (keys.includes(WORK_SESSION_KEY)) workSession = loadWorkSession();
   if (keys.includes(WORK_HISTORY_KEY)) workHistoryStore = loadWorkHistory();
   render();
+  if (assignmentsChanged) await saveCards();
   refreshCodexEventStream();
   syncCodexCards();
 });
@@ -5080,6 +5166,10 @@ window.addEventListener("pageshow", (event) => {
 });
 
 HEADER_CLOCKS.forEach((clock) => HEADER_CLOCK_RUNTIMES[clock.id]?.initialize());
+if (planetAssignmentsNeedSave) {
+  await saveCards();
+  planetAssignmentsNeedSave = false;
+}
 ensureDailyHeaderClock(true);
 revealHeaderClockAfterHydration();
 startCorpusClockAnimation();

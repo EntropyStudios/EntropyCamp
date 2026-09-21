@@ -29,6 +29,36 @@ from state_store import BusinessStateStore, StateConflict
 
 
 APP_DIRECTORY = Path(__file__).resolve().parent
+OUTER_WILDS_MODEL_DIRECTORY = (
+    APP_DIRECTORY / "private" / "outer-wilds-extracted" / "web-high-assets" / "glb"
+)
+OUTER_WILDS_MODEL_KEYS = frozenset(
+    {
+        "sun",
+        "white-hole",
+        "ash-twin",
+        "ember-twin",
+        "timber-hearth",
+        "attlerock",
+        "brittle-hollow",
+        "hollows-lantern",
+        "giants-deep",
+        "dark-bramble",
+        "interloper",
+        "quantum-moon",
+        "stranger",
+    }
+)
+OUTER_WILDS_EFFECT_DIRECTORY = (
+    APP_DIRECTORY / "private" / "outer-wilds-extracted" / "cosmos-effects"
+)
+OUTER_WILDS_EFFECT_FILES = {
+    "solar-prominence-geometry.json": "application/json",
+    "solar-flare-noise.png": "image/png",
+    "solar-flare-loop-mask.png": "image/png",
+    "sun-height.png": "image/png",
+    "sun-color-ramp.png": "image/png",
+}
 CODEX_HOME = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
 WIDGET_DIRECTORY = Path(
     os.environ.get("LUMEN_WIDGET_DIRECTORY", APP_DIRECTORY / "private" / "widget")
@@ -206,11 +236,19 @@ def _scan_rollout_window(
                     record = json.loads(raw_line)
                 except (json.JSONDecodeError, UnicodeDecodeError):
                     continue
-                if record.get("type") != "event_msg":
-                    continue
+                record_type = record.get("type")
                 payload = record.get("payload") or {}
-                event_type = payload.get("type")
-                if event_type not in WORK_LOG_EVENT_TYPES:
+                event_type = payload.get("type") if record_type == "event_msg" else None
+                if record_type == "event_msg":
+                    if event_type not in WORK_LOG_EVENT_TYPES:
+                        continue
+                elif record_type == "response_item":
+                    if payload.get("type") != "message" or payload.get("role") not in {
+                        "user",
+                        "assistant",
+                    }:
+                        continue
+                else:
                     continue
                 records_reversed.append(record)
                 timestamp = (
@@ -257,6 +295,38 @@ def _rollout_event_item(payload: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _response_message_item(payload: dict[str, Any]) -> dict[str, Any] | None:
+    if payload.get("type") != "message":
+        return None
+    role = payload.get("role")
+    if role not in {"user", "assistant"}:
+        return None
+    texts: list[str] = []
+    for part in payload.get("content") or []:
+        if isinstance(part, str):
+            text = part
+        elif isinstance(part, dict):
+            text = part.get("text") or part.get("inputText") or part.get("outputText")
+        else:
+            text = None
+        if isinstance(text, str) and text.strip():
+            texts.append(text.strip())
+    if not texts:
+        return None
+    text = "\n".join(texts)
+    if role == "user":
+        return {
+            "type": "userMessage",
+            "content": [{"type": "input_text", "text": text}],
+        }
+    phase = payload.get("phase")
+    return {
+        "type": "agentMessage",
+        "phase": phase if isinstance(phase, str) else None,
+        "text": text,
+    }
+
+
 def _thread_from_rollout_records(
     source: dict[str, Any], records: list[dict[str, Any]]
 ) -> dict[str, Any]:
@@ -269,10 +339,39 @@ def _thread_from_rollout_records(
             turns.append(current)
             current = None
 
+    def append_item(item: dict[str, Any]) -> None:
+        if current is None:
+            return
+        signature = (item.get("type"), item.get("phase"), _item_text(item))
+        if any(
+            (existing.get("type"), existing.get("phase"), _item_text(existing))
+            == signature
+            for existing in current.get("items") or []
+        ):
+            return
+        current["items"].append(item)
+
     for record in records:
         payload = record.get("payload") or {}
+        record_type = record.get("type")
         event_type = payload.get("type")
         event_time = _rollout_record_timestamp(record)
+        if record_type == "response_item":
+            item = _response_message_item(payload)
+            if item is None:
+                continue
+            if current is None:
+                current = {
+                    "id": None,
+                    "status": "inProgress",
+                    "startedAt": event_time,
+                    "completedAt": None,
+                    "items": [],
+                }
+            append_item(item)
+            continue
+        if record_type != "event_msg":
+            continue
         if event_type == "task_started":
             finish_current()
             current = {
@@ -296,7 +395,7 @@ def _thread_from_rollout_records(
                     "completedAt": None,
                     "items": [],
                 }
-            current["items"].append(item)
+            append_item(item)
             continue
 
         if event_type == "thread_rolled_back":
@@ -356,6 +455,120 @@ def _rollout_work_log(
     return _thread_work_log(thread, since, until, include_process)
 
 
+def _rollout_file_bounds(
+    path: Path, end: int, *, probe_size: int = 256 * 1024
+) -> tuple[float | None, float | None]:
+    """Read the first and last record timestamps without scanning the whole shard."""
+    if end <= 0:
+        return None, None
+    probe_size = max(1024, int(probe_size))
+    first_timestamp = None
+    last_timestamp = None
+    with Path(path).open("rb") as file:
+        first_data = file.read(min(end, probe_size))
+        for raw_line in first_data.splitlines():
+            try:
+                record = json.loads(raw_line)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                continue
+            first_timestamp = _rollout_record_timestamp(record)
+            if first_timestamp is not None:
+                break
+
+        start = max(0, end - probe_size)
+        file.seek(start)
+        last_data = file.read(end - start)
+        if start > 0:
+            newline = last_data.find(b"\n")
+            last_data = last_data[newline + 1 :] if newline >= 0 else b""
+        for raw_line in reversed(last_data.splitlines()):
+            try:
+                record = json.loads(raw_line)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                continue
+            last_timestamp = _rollout_record_timestamp(record)
+            if last_timestamp is not None:
+                break
+    return first_timestamp, last_timestamp
+
+
+def _merge_rollout_logs(
+    source: dict[str, Any], logs: list[dict[str, Any]]
+) -> dict[str, Any]:
+    merged_by_key: dict[tuple[Any, ...], dict[str, Any]] = {}
+    status_rank = {"inProgress": 0, "aborted": 1, "failed": 2, "completed": 3}
+
+    def item_signature(item: dict[str, Any]) -> tuple[Any, ...]:
+        return (
+            item.get("type"),
+            item.get("role"),
+            item.get("phase"),
+            item.get("text"),
+        )
+
+    for log in logs:
+        for turn in log.get("turns") or []:
+            turn_id = turn.get("id")
+            if turn_id:
+                key = ("id", str(turn_id))
+            else:
+                key = (
+                    "anonymous",
+                    turn.get("startedAt"),
+                    turn.get("completedAt"),
+                    tuple(item_signature(item) for item in turn.get("items") or []),
+                )
+            existing = merged_by_key.get(key)
+            if existing is None:
+                merged_by_key[key] = {
+                    **turn,
+                    "items": [dict(item) for item in turn.get("items") or []],
+                }
+                continue
+
+            starts = [
+                value
+                for value in (existing.get("startedAt"), turn.get("startedAt"))
+                if isinstance(value, (int, float))
+            ]
+            completions = [
+                value
+                for value in (existing.get("completedAt"), turn.get("completedAt"))
+                if isinstance(value, (int, float))
+            ]
+            existing["startedAt"] = min(starts) if starts else None
+            existing["completedAt"] = max(completions) if completions else None
+            if status_rank.get(str(turn.get("status")), -1) > status_rank.get(
+                str(existing.get("status")), -1
+            ):
+                existing["status"] = turn.get("status")
+            seen_items = {item_signature(item) for item in existing.get("items") or []}
+            for item in turn.get("items") or []:
+                signature = item_signature(item)
+                if signature in seen_items:
+                    continue
+                existing.setdefault("items", []).append(dict(item))
+                seen_items.add(signature)
+
+    turns = list(merged_by_key.values())
+    turns.sort(
+        key=lambda turn: (
+            turn.get("completedAt")
+            if isinstance(turn.get("completedAt"), (int, float))
+            else turn.get("startedAt")
+            if isinstance(turn.get("startedAt"), (int, float))
+            else float("inf"),
+            str(turn.get("id") or ""),
+        )
+    )
+    return {
+        "id": source.get("id"),
+        "name": source.get("name") or source.get("preview") or "未命名对话",
+        "preview": source.get("preview") or "",
+        "turns": turns,
+    }
+
+
 class CodexWorkLogReader:
     """Build work logs from the recent tail of append-only rollout files."""
 
@@ -383,17 +596,35 @@ class CodexWorkLogReader:
         until: float | None,
         include_process: bool,
     ) -> dict[str, Any]:
-        path_value = source.get("rolloutPath")
-        if not path_value:
+        path_values = list(source.get("rolloutPaths") or [])
+        preferred_path = source.get("rolloutPath")
+        if preferred_path and preferred_path not in path_values:
+            path_values.append(preferred_path)
+        paths = list(dict.fromkeys(Path(value) for value in path_values if value))
+        if not paths:
             raise FileNotFoundError("Codex 对话没有本地记录文件")
-        path = Path(path_value)
-        stat = path.stat()
-        stable_end = CodexRolloutMonitor._stable_end(path)
+        path_states: list[tuple[Path, os.stat_result, int, float | None, float | None]] = []
+        errors: list[Exception] = []
+        for path in paths:
+            try:
+                stat = path.stat()
+                stable_end = CodexRolloutMonitor._stable_end(path)
+                first_timestamp, last_timestamp = _rollout_file_bounds(path, stable_end)
+                path_states.append(
+                    (path, stat, stable_end, first_timestamp, last_timestamp)
+                )
+            except OSError as error:
+                errors.append(error)
+        if not path_states:
+            raise errors[0] if errors else FileNotFoundError(
+                "Codex 对话没有本地记录文件"
+            )
         cache_key = (
             source.get("id"),
-            str(path),
-            stat.st_mtime_ns,
-            stable_end,
+            tuple(
+                (str(path), stat.st_mtime_ns, stable_end)
+                for path, stat, stable_end, _, _ in path_states
+            ),
             source.get("name"),
             source.get("preview"),
             since,
@@ -406,14 +637,31 @@ class CodexWorkLogReader:
                 self._cache.move_to_end(cache_key)
                 return cached
 
-        log = _rollout_work_log(
-            source,
-            since,
-            until,
-            include_process,
-            end=stable_end,
-            chunk_size=self.chunk_size,
-        )
+        logs: list[dict[str, Any]] = []
+        read_errors: list[Exception] = []
+        attempted_paths = 0
+        for path, _, stable_end, first_timestamp, last_timestamp in path_states:
+            if since is not None and last_timestamp is not None and last_timestamp < since:
+                continue
+            if until is not None and first_timestamp is not None and first_timestamp > until:
+                continue
+            attempted_paths += 1
+            try:
+                logs.append(
+                    _rollout_work_log(
+                        {**source, "rolloutPath": path},
+                        since,
+                        until,
+                        include_process,
+                        end=stable_end,
+                        chunk_size=self.chunk_size,
+                    )
+                )
+            except (OSError, ValueError) as error:
+                read_errors.append(error)
+        if not logs and attempted_paths and read_errors:
+            raise read_errors[0]
+        log = _merge_rollout_logs(source, logs)
         with self._cache_lock:
             self._cache[cache_key] = log
             self._cache.move_to_end(cache_key)
@@ -469,12 +717,14 @@ class CodexWorkLogReader:
             source_by_id[thread_id]
             for thread_id in ordered_ids
             if source_by_id.get(thread_id, {}).get("rolloutPath")
+            or source_by_id.get(thread_id, {}).get("rolloutPaths")
         ]
         results: dict[str, dict[str, Any]] = {}
         failed_ids = [
             thread_id
             for thread_id in ordered_ids
             if not source_by_id.get(thread_id, {}).get("rolloutPath")
+            and not source_by_id.get(thread_id, {}).get("rolloutPaths")
         ]
 
         def read_one(source: dict[str, Any]) -> tuple[str, dict[str, Any] | Exception]:
@@ -749,7 +999,7 @@ CODEX_MONITOR = CodexRolloutMonitor(CODEX_HOME)
 CODEX_WORK_LOGS = CodexWorkLogReader(CODEX_MONITOR, CODEX_BRIDGE)
 
 
-def _load_remote_codex_specs() -> list[dict[str, str]]:
+def _load_remote_codex_specs() -> list[dict[str, Any]]:
     config_path = Path(
         os.environ.get("LUMEN_CODEX_REMOTE_CONFIG", APP_DIRECTORY / "private" / "codex-remotes.json")
     )
@@ -760,7 +1010,7 @@ def _load_remote_codex_specs() -> list[dict[str, str]]:
     specs = payload.get("hosts") if isinstance(payload, dict) else None
     if not isinstance(specs, list):
         return []
-    valid: list[dict[str, str]] = []
+    valid: list[dict[str, Any]] = []
     for item in specs:
         if not isinstance(item, dict):
             continue
@@ -769,6 +1019,7 @@ def _load_remote_codex_specs() -> list[dict[str, str]]:
         ssh_user = str(item.get("sshUser") or "").strip()
         codex_path = str(item.get("codexPath") or "codex").strip()
         label = str(item.get("label") or ssh_host).strip()
+        raw_aliases = item.get("aliases")
         if not re.fullmatch(r"ssh-[A-Za-z0-9][A-Za-z0-9._-]{0,63}", host_id):
             continue
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", ssh_host):
@@ -779,7 +1030,23 @@ def _load_remote_codex_specs() -> list[dict[str, str]]:
             continue
         if not label:
             label = ssh_host
-        valid.append({"id": host_id, "sshHost": ssh_host, "sshUser": ssh_user, "codexPath": codex_path, "label": label[:80]})
+        aliases = [
+            str(alias).strip()
+            for alias in (raw_aliases if isinstance(raw_aliases, list) else [])
+            if isinstance(alias, str)
+            and str(alias).strip() != host_id
+            and re.fullmatch(
+                r"ssh-[A-Za-z0-9][A-Za-z0-9._-]{0,63}", str(alias).strip()
+            )
+        ]
+        valid.append({
+            "id": host_id,
+            "sshHost": ssh_host,
+            "sshUser": ssh_user,
+            "codexPath": codex_path,
+            "label": label[:80],
+            "aliases": list(dict.fromkeys(aliases)),
+        })
     return valid
 
 
@@ -808,6 +1075,13 @@ REMOTE_CODEX_BRIDGES: dict[str, CodexBridge] = {
     for spec in REMOTE_CODEX_SPECS
 }
 REMOTE_CODEX_LABELS = {spec["id"]: spec["label"] for spec in REMOTE_CODEX_SPECS}
+for remote_spec in REMOTE_CODEX_SPECS:
+    canonical_bridge = REMOTE_CODEX_BRIDGES[remote_spec["id"]]
+    for remote_alias in remote_spec.get("aliases") or []:
+        if remote_alias in REMOTE_CODEX_BRIDGES:
+            continue
+        REMOTE_CODEX_BRIDGES[remote_alias] = canonical_bridge
+        REMOTE_CODEX_LABELS[remote_alias] = remote_spec["label"]
 FEISHU_NOTIFIER: FeishuNotifier | None = None
 
 
@@ -847,6 +1121,55 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
     def send_head(self):
         if not self._local_host():
             return None
+        request_path = urllib.parse.unquote(urllib.parse.urlsplit(self.path).path)
+        model_prefix = "/assets/outer-wilds/models/"
+        if request_path.startswith(model_prefix):
+            filename = request_path.removeprefix(model_prefix)
+            key = filename.removesuffix(".glb")
+            if (
+                filename != f"{key}.glb"
+                or "/" in filename
+                or key not in OUTER_WILDS_MODEL_KEYS
+            ):
+                self.send_error(404, "Not found")
+                return None
+            root = OUTER_WILDS_MODEL_DIRECTORY.resolve()
+            path = (root / filename).resolve()
+            try:
+                path.relative_to(root)
+                file = path.open("rb")
+            except (OSError, ValueError):
+                self.send_error(404, "Not found")
+                return None
+            stat = path.stat()
+            self.send_response(200)
+            self.send_header("Content-Type", "model/gltf-binary")
+            self.send_header("Content-Length", str(stat.st_size))
+            self.send_header("Last-Modified", self.date_time_string(stat.st_mtime))
+            self.end_headers()
+            return file
+        effect_prefix = "/assets/outer-wilds/effects/"
+        if request_path.startswith(effect_prefix):
+            filename = request_path.removeprefix(effect_prefix)
+            content_type = OUTER_WILDS_EFFECT_FILES.get(filename)
+            if not content_type or "/" in filename:
+                self.send_error(404, "Not found")
+                return None
+            root = OUTER_WILDS_EFFECT_DIRECTORY.resolve()
+            path = (root / filename).resolve()
+            try:
+                path.relative_to(root)
+                file = path.open("rb")
+            except (OSError, ValueError):
+                self.send_error(404, "Not found")
+                return None
+            stat = path.stat()
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(stat.st_size))
+            self.send_header("Last-Modified", self.date_time_string(stat.st_mtime))
+            self.end_headers()
+            return file
         path = Path(self.translate_path(self.path)).resolve()
         root = APP_DIRECTORY.resolve()
         try:
@@ -958,7 +1281,10 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
             except Exception:
                 return []
 
-        remote_items = list(REMOTE_CODEX_BRIDGES.items())
+        remote_items = [
+            (spec["id"], REMOTE_CODEX_BRIDGES[spec["id"]])
+            for spec in REMOTE_CODEX_SPECS
+        ]
         if remote_items:
             with concurrent.futures.ThreadPoolExecutor(
                 max_workers=len(remote_items), thread_name_prefix="codex-remote-list"

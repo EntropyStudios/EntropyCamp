@@ -135,7 +135,7 @@ class CodexRolloutMonitor:
         ]
 
     def rollout_sources(self, thread_ids: list[str]) -> list[dict[str, Any]]:
-        """Resolve thread metadata and append-only rollout paths in request order."""
+        """Resolve thread metadata and every rollout shard in request order."""
         ordered_ids = list(dict.fromkeys(thread_ids[:50]))
         records = {
             record["id"]: record
@@ -143,15 +143,46 @@ class CodexRolloutMonitor:
                 ordered_ids, include_archived=True
             )
         }
-        return [
-            {
+        sources: list[dict[str, Any]] = []
+        for thread_id in ordered_ids:
+            record = records.get(thread_id) or {}
+            preferred_path = record.get("rolloutPath")
+            sources.append({
                 "id": thread_id,
-                "name": (records.get(thread_id) or {}).get("name") or "Codex 对话",
-                "preview": (records.get(thread_id) or {}).get("preview") or "",
-                "rolloutPath": (records.get(thread_id) or {}).get("rolloutPath"),
-            }
-            for thread_id in ordered_ids
-        ]
+                "name": record.get("name") or "Codex 对话",
+                "preview": record.get("preview") or "",
+                "rolloutPath": preferred_path,
+                "rolloutPaths": self._rollout_paths_for_thread(
+                    thread_id, preferred_path
+                ),
+            })
+        return sources
+
+    def _rollout_paths_for_thread(
+        self, thread_id: str, preferred_path: Path | None
+    ) -> list[Path]:
+        sessions = self.codex_home / "sessions"
+        marker = f"-{thread_id}"
+        discovered: list[Path] = []
+        if sessions.is_dir():
+            for path in sessions.glob("*/*/*/rollout-*.jsonl"):
+                name = path.name
+                marker_index = name.find(marker)
+                if marker_index < 0:
+                    continue
+                suffix = name[marker_index + len(marker) :]
+                if suffix != ".jsonl" and not (
+                    suffix.startswith("_") and suffix.endswith(".jsonl")
+                ):
+                    continue
+                if path.is_file():
+                    discovered.append(path)
+        discovered = sorted(dict.fromkeys(discovered), key=str)
+        if preferred_path:
+            preferred_path = Path(preferred_path)
+            discovered = [path for path in discovered if path != preferred_path]
+            discovered.append(preferred_path)
+        return discovered
 
     def thread_statuses(self, thread_ids: list[str]) -> list[dict[str, Any]]:
         ordered_ids = list(dict.fromkeys(thread_ids[:50]))

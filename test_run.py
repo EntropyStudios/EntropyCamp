@@ -48,6 +48,74 @@ class StaticFileSecurityTests(unittest.TestCase):
                     server.server_close()
                     worker.join(timeout=2)
 
+    def test_outer_wilds_models_are_served_only_from_the_explicit_allowlist(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            model_root = root / "private-models"
+            model_root.mkdir()
+            (root / "index.html").write_text("ok")
+            (model_root / "timber-hearth.glb").write_bytes(b"allowed-model")
+            (model_root / "eye.glb").write_bytes(b"blocked-model")
+            with (
+                mock.patch.object(reminder_run, "APP_DIRECTORY", root),
+                mock.patch.object(reminder_run, "OUTER_WILDS_MODEL_DIRECTORY", model_root),
+            ):
+                server = reminder_run.ReminderServer(("127.0.0.1", 0), reminder_run.ReminderHandler)
+                worker = threading.Thread(target=server.serve_forever, daemon=True)
+                worker.start()
+                base = f"http://127.0.0.1:{server.server_port}"
+                try:
+                    with urllib.request.urlopen(base + "/assets/outer-wilds/models/timber-hearth.glb") as response:
+                        self.assertEqual(response.read(), b"allowed-model")
+                        self.assertEqual(response.headers.get_content_type(), "model/gltf-binary")
+                    for path in (
+                        "/assets/outer-wilds/models/eye.glb",
+                        "/assets/outer-wilds/models/../private-models/eye.glb",
+                        "/assets/outer-wilds/models/timber-hearth.txt",
+                    ):
+                        with self.subTest(path=path):
+                            with self.assertRaises(urllib.error.HTTPError) as caught:
+                                urllib.request.urlopen(base + path)
+                            self.assertEqual(caught.exception.code, 404)
+                finally:
+                    server.shutdown()
+                    server.server_close()
+                    worker.join(timeout=2)
+
+    def test_outer_wilds_effects_are_served_only_from_the_explicit_allowlist(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            effect_root = root / "private-effects"
+            effect_root.mkdir()
+            (root / "index.html").write_text("ok")
+            (effect_root / "solar-prominence-geometry.json").write_bytes(b"{}")
+            (effect_root / "secret.json").write_bytes(b"blocked")
+            with (
+                mock.patch.object(reminder_run, "APP_DIRECTORY", root),
+                mock.patch.object(reminder_run, "OUTER_WILDS_EFFECT_DIRECTORY", effect_root),
+            ):
+                server = reminder_run.ReminderServer(("127.0.0.1", 0), reminder_run.ReminderHandler)
+                worker = threading.Thread(target=server.serve_forever, daemon=True)
+                worker.start()
+                base = f"http://127.0.0.1:{server.server_port}"
+                try:
+                    with urllib.request.urlopen(base + "/assets/outer-wilds/effects/solar-prominence-geometry.json") as response:
+                        self.assertEqual(response.read(), b"{}")
+                        self.assertEqual(response.headers.get_content_type(), "application/json")
+                    for path in (
+                        "/assets/outer-wilds/effects/secret.json",
+                        "/assets/outer-wilds/effects/../private-effects/secret.json",
+                        "/assets/outer-wilds/effects/solar-prominence-geometry.txt",
+                    ):
+                        with self.subTest(path=path):
+                            with self.assertRaises(urllib.error.HTTPError) as caught:
+                                urllib.request.urlopen(base + path)
+                            self.assertEqual(caught.exception.code, 404)
+                finally:
+                    server.shutdown()
+                    server.server_close()
+                    worker.join(timeout=2)
+
 
 class LauncherTests(unittest.TestCase):
     def test_installed_legacy_and_autostart_launchers_use_new_service_and_zen(self):
@@ -226,7 +294,12 @@ const document = {
   getElementById: () => null,
   createElementNS: () => ({ setAttribute() {}, classList: { add() {} } }),
 };
-const window = { location: { search: "" }, matchMedia: () => ({ matches: false }) };
+const window = {
+  location: { search: "" },
+  matchMedia: () => ({ matches: false }),
+  SolarCycleCore: { stateForSession: () => ({ mode: "day", token: "", dayProgress: 0, sampledAt: Date.now() }) },
+  PlanetVisualCore: { PLANET_KEYS: [], ensureAssignments: () => false, rerollAssignments: () => false },
+};
 const context = {
   console, Date, Intl, Math, Number, String, Object, Array, Map, Set, JSON,
   URLSearchParams,
@@ -1061,16 +1134,35 @@ class CodexRolloutMonitorTests(unittest.TestCase):
         self.assertEqual(sources[0]["id"], self.thread_id)
         self.assertEqual(sources[0]["rolloutPath"], self.rollout_path)
 
+    def test_rollout_source_discovers_all_shards_for_the_root_thread(self):
+        older = (
+            self.codex_home
+            / "sessions"
+            / "2026"
+            / "08"
+            / "16"
+            / f"rollout-2026-08-16T10-00-00-{self.thread_id}_continued.jsonl"
+        )
+        older.parent.mkdir(parents=True)
+        older.write_text("", encoding="utf-8")
+
+        source = self.monitor.rollout_sources([self.thread_id])[0]
+
+        self.assertEqual(source["rolloutPath"], self.rollout_path)
+        self.assertEqual(source["rolloutPaths"], [older, self.rollout_path])
+
 
 class ReminderHandlerThreadNameTests(unittest.TestCase):
     def test_thread_reference_parser_keeps_ssh_host_separate(self):
         parsed = reminder_run.urllib.parse.urlparse(
-            "/api/codex/status?id=local-id&id=ssh-192-168-100-255%3A%3Aremote-id&id=unknown%3A%3Aignored"
+            "/api/codex/status?id=local-id&id=ssh-192-168-100-255%3A%3Aremote-id"
+            "&id=ssh-192-168-0-255%3A%3Alegacy-remote-id&id=unknown%3A%3Aignored"
         )
         handler = object.__new__(reminder_run.ReminderHandler)
         self.assertEqual(handler._thread_refs(parsed), [
             {"hostId": "local", "id": "local-id", "ref": "local-id"},
             {"hostId": "ssh-192-168-100-255", "id": "remote-id", "ref": "ssh-192-168-100-255::remote-id"},
+            {"hostId": "ssh-192-168-0-255", "id": "legacy-remote-id", "ref": "ssh-192-168-0-255::legacy-remote-id"},
             {"hostId": "local", "id": "unknown::ignored", "ref": "unknown::ignored"},
         ])
 
@@ -1146,6 +1238,35 @@ class CodexRolloutWorkLogReaderTests(unittest.TestCase):
         }
         with self.rollout_path.open("a", encoding="utf-8") as file:
             file.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+    @staticmethod
+    def _append_to(path, timestamp, event_type, **payload):
+        event = {
+            "timestamp": timestamp,
+            "type": "event_msg",
+            "payload": {"type": event_type, **payload},
+        }
+        with path.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(event, ensure_ascii=False) + "\n")
+
+    @staticmethod
+    def _append_response_message(path, timestamp, role, text, phase=None):
+        payload = {
+            "type": "message",
+            "role": role,
+            "content": [{
+                "type": "input_text" if role == "user" else "output_text",
+                "text": text,
+            }],
+        }
+        if phase:
+            payload["phase"] = phase
+        with path.open("a", encoding="utf-8") as file:
+            file.write(json.dumps({
+                "timestamp": timestamp,
+                "type": "response_item",
+                "payload": payload,
+            }, ensure_ascii=False) + "\n")
 
     def _source(self):
         return {
@@ -1292,6 +1413,58 @@ class CodexRolloutWorkLogReaderTests(unittest.TestCase):
             ["问题2", "过程2", "回复2"],
         )
 
+    def test_rollout_work_log_reads_current_response_item_messages(self):
+        self._append(
+            "1970-01-01T00:03:20Z",
+            "task_started",
+            turn_id="turn-current",
+            started_at=200,
+        )
+        self._append_response_message(
+            self.rollout_path,
+            "1970-01-01T00:03:21Z",
+            "user",
+            "新版问题",
+        )
+        self._append_response_message(
+            self.rollout_path,
+            "1970-01-01T00:03:22Z",
+            "assistant",
+            "新版过程",
+            "commentary",
+        )
+        self._append_response_message(
+            self.rollout_path,
+            "1970-01-01T00:03:39Z",
+            "assistant",
+            "新版回复",
+            "final_answer",
+        )
+        self._append(
+            "1970-01-01T00:03:40Z",
+            "task_complete",
+            turn_id="turn-current",
+            started_at=200,
+            completed_at=220,
+        )
+
+        without_process = reminder_run._rollout_work_log(
+            self._source(), 150, None, False, chunk_size=64,
+        )
+        with_process = reminder_run._rollout_work_log(
+            self._source(), 150, None, True, chunk_size=64,
+        )
+
+        self.assertEqual([turn["id"] for turn in without_process["turns"]], ["turn-current"])
+        self.assertEqual(
+            [item["text"] for item in without_process["turns"][0]["items"]],
+            ["新版问题", "新版回复"],
+        )
+        self.assertEqual(
+            [item["text"] for item in with_process["turns"][0]["items"]],
+            ["新版问题", "新版过程", "新版回复"],
+        )
+
     def test_turn_started_before_shift_is_kept_when_it_completed_after_shift(self):
         self._append(
             "1970-01-01T00:05:00Z",
@@ -1424,6 +1597,49 @@ class CodexRolloutWorkLogReaderTests(unittest.TestCase):
         self.assertEqual(first, second)
         self.assertEqual(first[0]["turns"][0]["status"], "inProgress")
         self.assertEqual(third[0]["turns"][0]["status"], "completed")
+
+    def test_reader_merges_all_rollout_shards_and_deduplicates_turns(self):
+        old_path = Path(self.temp_directory.name) / "rollout-old.jsonl"
+        new_path = Path(self.temp_directory.name) / "rollout-new.jsonl"
+        old_path.write_text("", encoding="utf-8")
+        new_path.write_text("", encoding="utf-8")
+
+        self._append_to(old_path, "1970-01-01T00:01:40Z", "task_started", turn_id="turn-old", started_at=100)
+        self._append_to(old_path, "1970-01-01T00:01:41Z", "user_message", message="旧分片问题")
+        self._append_to(old_path, "1970-01-01T00:01:59Z", "task_complete", turn_id="turn-old", started_at=100, completed_at=120)
+        self._append_to(new_path, "1970-01-01T00:03:20Z", "task_started", turn_id="turn-new", started_at=200)
+        self._append_response_message(new_path, "1970-01-01T00:03:21Z", "user", "新分片问题")
+        self._append_response_message(new_path, "1970-01-01T00:03:39Z", "assistant", "新分片回复", "final_answer")
+        self._append_to(new_path, "1970-01-01T00:03:40Z", "task_complete", turn_id="turn-new", started_at=200, completed_at=220)
+        # A resumed file can repeat an already persisted turn; it must not duplicate the report.
+        self._append_to(new_path, "1970-01-01T00:04:00Z", "task_started", turn_id="turn-old", started_at=100)
+        self._append_to(new_path, "1970-01-01T00:04:01Z", "user_message", message="旧分片问题")
+        self._append_to(new_path, "1970-01-01T00:04:02Z", "task_complete", turn_id="turn-old", started_at=100, completed_at=120)
+
+        class FakeMonitor:
+            def rollout_sources(_self, thread_ids):
+                return [{
+                    "id": "thread-1",
+                    "name": "测试对话",
+                    "preview": "",
+                    "rolloutPath": new_path,
+                    "rolloutPaths": [old_path, new_path],
+                }]
+
+        class FailingBridge:
+            def work_logs(self, *args, **kwargs):
+                raise AssertionError("不应回退到完整 thread/read")
+
+        reader = reminder_run.CodexWorkLogReader(
+            FakeMonitor(), FailingBridge(), max_workers=1, chunk_size=64,
+        )
+        log = reader.work_logs(["thread-1"], 50, None, False)[0]
+
+        self.assertEqual([turn["id"] for turn in log["turns"]], ["turn-old", "turn-new"])
+        self.assertEqual(
+            [item["text"] for item in log["turns"][1]["items"]],
+            ["新分片问题", "新分片回复"],
+        )
 
 
 class CodexWorkLogTests(unittest.TestCase):
@@ -1713,6 +1929,25 @@ console.log(JSON.stringify({ sorted, original: cards.map((card) => card.id) }));
 
 
 class GraphLayoutTests(unittest.TestCase):
+    def test_graph_uses_beijing_solar_cycle_official_prominences_and_work_transitions(self):
+        root = Path(__file__).parent
+        html = (root / "index.html").read_text(encoding="utf-8")
+        app = (root / "app.js").read_text(encoding="utf-8")
+        graph = (root / "graph-3d.js").read_text(encoding="utf-8")
+        self.assertIn('<script src="solar-cycle-core.js"></script>', html)
+        self.assertLess(html.index('src="solar-cycle-core.js"'), html.index('src="app.js"'))
+        self.assertIn("solarCycleCore.stateForSession(workSession, now)", app)
+        self.assertIn("planetVisualCore.rerollAssignments(cards, workSession.startedAt)", app)
+        self.assertIn('type: "finale"', graph)
+        self.assertIn('type: "rewind"', graph)
+        self.assertIn("createProminenceSystem", graph)
+        self.assertIn("solar-prominence-geometry.json", graph)
+        self.assertIn("globalExplode", graph)
+        self.assertIn("const INTERIOR_SHARD_COUNT = 4200", graph)
+        self.assertIn("createInteriorShardLayer", graph)
+        self.assertIn('layer.userData.style = "hot-core-B"', graph)
+        self.assertNotIn("diffuseColor.a *= mix(1.0, .05", graph)
+
     def test_graph_only_creates_active_model_clusters_and_local_edges(self):
         project_root = Path(__file__).parent
         app = (project_root / "app.js").read_text(encoding="utf-8")
@@ -1750,25 +1985,50 @@ class GraphLayoutTests(unittest.TestCase):
         self.assertIn('class="graph-fallback"', app)
         self.assertIn("new THREE.WebGLRenderer", graph)
         self.assertIn("new THREE.Raycaster", graph)
-        self.assertIn("flowParticles", graph)
-        self.assertIn('canvas.addEventListener("pointerdown"', graph)
-        self.assertIn('canvas.addEventListener("wheel"', graph)
+        self.assertIn("createAssetLibrary", graph)
+        self.assertIn('import("three/addons/loaders/GLTFLoader.js")', graph)
+        self.assertIn('["pointerdown", onPointerDown]', graph)
+        self.assertIn('["contextmenu", onContextMenu]', graph)
+        self.assertIn('if ((event.button ?? 0) !== 0) return;', graph)
+        self.assertNotIn("new THREE.LineLoop", graph)
         self.assertRegex(css, r"\.graph-3d-shell\s*\{[^}]*height:\s*clamp")
         self.assertIn(".card-grid.is-3d-ready .graph-fallback", css)
         self.assertNotIn("https://", graph)
+
+    def test_three_dimensional_graph_keeps_free_orbit_controls_and_screen_space_lensing(self):
+        project_root = Path(__file__).parent
+        graph = (project_root / "graph-3d.js").read_text(encoding="utf-8")
+        controls = project_root / "assets" / "vendor" / "addons" / "controls" / "TrackballControls.js"
+        self.assertTrue(controls.is_file())
+        self.assertIn('import { TrackballControls } from "./assets/vendor/addons/controls/TrackballControls.js"', graph)
+        self.assertIn("new TrackballControls(camera, canvas)", graph)
+        self.assertNotIn("root.rotation.y = THREE.MathUtils.clamp", graph)
+        self.assertNotIn("root.rotation.x = THREE.MathUtils.clamp", graph)
+        self.assertIn("new THREE.WebGLRenderTarget", graph)
+        self.assertIn("uPointer", graph)
+        self.assertIn("uWhiteHole", graph)
+        self.assertIn("renderer.setRenderTarget(mainTarget)", graph)
+        self.assertIn("renderer.render(lensing.scene, lensing.camera)", graph)
+        self.assertIn("const POINTER_BLACK_HOLE_RADIUS = 13.05", graph)
+        self.assertIn("float crossMark=", graph)
+        self.assertNotIn("float photon=", graph)
+        self.assertNotIn("float outer=", graph)
 
     def test_reasoning_effort_belongs_to_threads_and_edges_not_model_nodes(self):
         project_root = Path(__file__).parent
         app = (project_root / "app.js").read_text(encoding="utf-8")
         graph = (project_root / "graph-3d.js").read_text(encoding="utf-8")
-        self.assertIn('label: modelDisplayLabel(card.codexModel),\n        threadCount: 0,', app)
+        self.assertNotIn('kind: "model"', app[app.index("function graph3DNodes"):app.index("function graph3DMarkup")])
+        self.assertIn('modelLabel: card.codexModel ? modelDisplayLabel(card.codexModel) : ""', app)
         self.assertIn('function reasoningEffortLabel(effort)', app)
         self.assertIn('data-reasoning-effort=', app)
-        self.assertIn('node.kind === "thread" && node.effort ? effortColor(node.effort)', graph)
-        self.assertIn('function threadNodeSubtitle(node)', graph)
-        self.assertNotIn('isModel ? effortColor(node.effort)', graph)
-        self.assertIn('if (!group.userData.comet) group.userData.label = createLabel', graph)
-        self.assertIn('const orbitSeed = textSeed(node.id)', graph)
+        self.assertIn('const color = effortColor(node.effort)', graph)
+        self.assertIn('const enabled = Boolean(node.working && !node.shattered', graph)
+        self.assertIn('return [node.modelLabel, effort ? `强度${effort}` : "", runtimeLabel(node)]', graph)
+        self.assertNotIn('return [node.phaseLabel, node.modelLabel', graph)
+        self.assertIn('container.dataset.graphSunStatus = status', graph)
+        self.assertNotIn('node.kind === "model"', graph)
+        self.assertIn('planetKey: card.visualPlanetKey', app)
 
     def test_active_unread_threads_share_model_without_sharing_effort(self):
         root = Path(__file__).parent
@@ -1796,15 +2056,14 @@ console.log(JSON.stringify(context.graph3DNodes(cards, 1000)));
         result = subprocess.run(["node", "-e", script, str(root / "app.js")], check=True, capture_output=True, text=True)
         nodes = json.loads(result.stdout)
         models = [node for node in nodes if node["kind"] == "model"]
-        self.assertEqual(len(models), 1)
-        self.assertEqual(models[0]["threadCount"], 2)
-        self.assertNotIn("effort", models[0])
+        self.assertEqual(models, [])
         threads = {node["id"]: node for node in nodes if node["kind"] == "thread"}
         self.assertEqual(threads["a"]["state"], "due")
-        self.assertEqual(threads["a"]["modelId"], threads["b"]["modelId"])
+        self.assertTrue(threads["a"]["shattered"])
+        self.assertFalse(threads["a"]["working"])
+        self.assertTrue(threads["b"]["working"])
         self.assertEqual(threads["a"]["effort"], "low")
         self.assertEqual(threads["b"]["effort"], "max")
-        self.assertIsNone(threads["c"]["modelId"])
         self.assertEqual(threads["c"]["effort"], "")
 
     def test_orbits_are_non_coplanar_deterministic_and_move_around_their_star(self):
@@ -1824,6 +2083,20 @@ console.log(JSON.stringify({specs, repeat:createOrbitSpec('thread-0',0,12),
         for before, after in zip(data["before"], data["after"]):
             self.assertNotEqual(before, after)
         self.assertGreater(data["comet"]["eccentricity"], max(s["eccentricity"] for s in data["specs"]))
+
+    def test_outer_orbits_are_compressed_and_apoapsis_stays_visible(self):
+        root = Path(__file__).parent
+        script = """
+import {createOrbitSpec} from './graph-3d.js';
+const keys=['ash-twin','stranger','giants-deep','dark-bramble','interloper'];
+const specs=keys.map((key,index)=>createOrbitSpec('visible-'+key,index,keys.length,key==='interloper',key,index));
+console.log(JSON.stringify(specs.map((spec,index)=>({key:keys[index],semiMajor:spec.semiMajor,e:spec.eccentricity,apoapsis:spec.semiMajor*(1+spec.eccentricity)}))));
+"""
+        result = subprocess.run(["node", "--input-type=module", "-e", script], cwd=root, check=True, capture_output=True, text=True)
+        values = json.loads(result.stdout)
+        self.assertTrue(all(row["apoapsis"] <= 24.001 for row in values), values)
+        self.assertLess(values[-1]["semiMajor"] / values[0]["semiMajor"], 3.6)
+        self.assertEqual([row["key"] for row in values], ["ash-twin", "stranger", "giants-deep", "dark-bramble", "interloper"])
 
     def test_details_can_be_closed_without_reloading(self):
         root = Path(__file__).parent

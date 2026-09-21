@@ -1,0 +1,184 @@
+{
+  "version": 1,
+  "checkedAt": "2026-09-17",
+  "policy": {
+    "fanContent": "https://www.mobiusdigitalgames.com/fan-content-policy.html",
+    "copyOfficialAssetsIntoRepository": false,
+    "copyUnlicensedCommunityAssetsIntoRepository": false,
+    "defaultSpoilerTier": "safe"
+  },
+  "bodies": [
+    {
+      "id": "sun",
+      "label": "Sun",
+      "labelZh": "太阳",
+      "category": "star",
+      "spoilerTier": "safe",
+      "build": "procedural-shader",
+      "signature": ["plasma", "corona", "supernova-timeline"]
+    },
+    {
+      "id": "ash-twin",
+      "label": "Ash Twin",
+      "labelZh": "灰烬双星",
+      "category": "planet",
+      "spoilerTier": "safe",
+      "build": "procedural-geometry",
+      "signature": ["pale-desert", "draining-sand", "revealed-towers"]
+    },
+    {
+      "id": "ember-twin",
+      "label": "Ember Twin",
+      "labelZh": "余烬双星",
+      "category": "planet",
+      "spoilerTier": "safe",
+      "build": "procedural-geometry",
+      "signature": ["red-strata", "canyons", "rising-sand"]
+    },
+    {
+      "id": "timber-hearth",
+      "label": "Timber Hearth",
+      "labelZh": "木炉星",
+      "category": "planet",
+      "spoilerTier": "safe",
+      "build": "procedural-geometry",
+      "signature": ["forest", "craters", "geysers", "atmosphere"]
+    },
+    {
+      "id": "attlerock",
+      "label": "Attlerock",
+      "labelZh": "废岩星",
+      "category": "moon",
+      "spoilerTier": "safe",
+      "build": "procedural-geometry",
+      "signature": ["grey-rock", "large-craters"]
+    },
+    {
+      "id": "brittle-hollow",
+      "label": "Brittle Hollow",
+      "labelZh": "碎空星",
+      "category": "planet",
+      "spoilerTier": "safe",
+      "build": "procedural-chunks",
+      "signature": ["fragmented-shell", "geode-interior", "black-hole"]
+    },
+    {
+      "id": "hollows-lantern",
+      "label": "Hollow's Lantern",
+      "labelZh": "空心灯",
+      "category": "moon",
+      "spoilerTier": "safe",
+      "build": "procedural-geometry",
+      "signature": ["volcanic-crust", "lava", "meteors"]
+    },
+    {
+      "id": "giants-deep",
+      "label": "Giant's Deep",
+      "labelZh": "深巨星",
+      "category": "planet",
+      "spoilerTier": "safe",
+      "build": "layered-shaders",
+      "signature": ["green-clouds", "polar-spirals", "lightning", "cyclones", "floating-islands"]
+    },
+    {
+      "id": "dark-bramble",
+      "label": "Dark Bramble",
+      "labelZh": "黑棘星",
+      "category": "planet",
+      "spoilerTier": "safe",
+      "build": "procedural-curves",
+      "signature": ["shattered-ice", "giant-vines", "fog"]
+    },
+    {
+      "id": "interloper",
+      "label": "The Interloper",
+      "labelZh": "闯入者",
+      "category": "comet",
+      "spoilerTier": "safe",
+      "build": "procedural-geometry",
+      "signature": ["ice-nucleus", "dark-fissure", "particle-tail"]
+    },
+    {
+      "id": "quantum-moon",
+      "label": "Quantum Moon",
+      "labelZh": "量子卫星",
+      "category": "moon",
+      "spoilerTier": "mild",
+      "build": "procedural-material-states",
+      "signature": ["six-appearances", "dither-relocation"]
+    },
+    {
+      "id": "white-hole",
+      "label": "White Hole",
+      "labelZh": "白洞",
+      "category": "phenomenon",
+      "spoilerTier": "mild",
+      "build": "procedural-shader",
+      "signature": ["white-core", "blue-lensing", "outward-particles"]
+    },
+    {
+      "id": "sun-station",
+      "label": "Sun Station",
+      "labelZh": "太阳站",
+      "category": "station",
+      "spoilerTier": "mild",
+      "build": "code-native-geometry",
+      "signature": ["gold-modules", "close-solar-orbit"]
+    },
+    {
+      "id": "orbital-probe-cannon",
+      "label": "Orbital Probe Cannon",
+      "labelZh": "轨道探测炮",
+      "category": "station",
+      "spoilerTier": "mild",
+      "build": "custom-low-poly",
+      "signature": ["broken-ring", "cyan-nomai-light", "probe-launch"]
+    },
+    {
+      "id": "deep-space-satellite",
+      "label": "Deep Space Satellite",
+      "labelZh": "深空卫星",
+      "category": "satellite",
+      "spoilerTier": "safe",
+      "build": "code-native-geometry",
+      "signature": ["four-arms", "distant-orbit"]
+    },
+    {
+      "id": "stranger",
+      "label": "The Stranger",
+      "labelZh": "陌客",
+      "category": "ringworld",
+      "spoilerTier": "major-dlc",
+      "build": "custom-blender-glb",
+      "signature": ["dark-cloak", "rotating-ring", "artificial-sun", "solar-sails"]
+    },
+    {
+      "id": "eye",
+      "label": "Eye of the Universe",
+      "labelZh": "宇宙之眼",
+      "category": "phenomenon",
+      "spoilerTier": "ending",
+      "build": "procedural-shader",
+      "signature": ["branching-symbol", "impossible-parallax", "dark-void"]
+    }
+  ],
+  "secondaryAssets": [
+    "sand-column",
+    "white-hole-station",
+    "hearthian-ship",
+    "little-scout",
+    "signalscope",
+    "campfire",
+    "marshmallow",
+    "nomai-ruins",
+    "nomai-statue",
+    "nomai-mask",
+    "nomai-shuttle",
+    "escape-pod",
+    "quantum-shard",
+    "anglerfish",
+    "traveler-instruments",
+    "dreamworld-green-fire",
+    "vessel"
+  ]
+}

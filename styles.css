@@ -6270,9 +6270,17 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   line-height: 1.5;
 }
 
-.graph-space-label.is-model strong {
+.graph-space-label.is-sun strong {
   color: #ffe0a5;
   font-size: 14px;
+}
+
+.graph-space-label.is-white strong {
+  color: #c7efff;
+}
+
+.graph-space-label.is-thread span {
+  transition: color 240ms ease;
 }
 
 .graph-space-label.is-edge {

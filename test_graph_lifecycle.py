@@ -33,8 +33,10 @@ const context={grid,document:{hidden:false,body:{classList:classes()}},Date,Map,
  cards:[{id:'t',kind:'thread',state:'processing'}],workSession:{active:true},
  cardOrderCore:{sortCards:cards=>cards},getCardState:()=> 'processing',
  graph3DMarkup:()=>'<canvas>',graphMarkup:()=>'<article>',graph3DNodes:cards=>cards,
+ graph3DSolarState:()=>({mode:'working',event:'none',token:'start:1',dayProgress:.5,cycleOffsetMs:8*60*60*1000,sampledAt:Date.now()}),
  shouldReduceMotion:()=>false,snapshotCardRects:()=>new Map(),ensureActiveWorkBaselines(){},renderWorkSession(){},
  queueWidgetSnapshotSync(){},animateCardLayout(){},updateGraphConnections(){},showGraphNodeInspector(){},
+ recycleCompletedCard(){return true;},
  requestAnimationFrame:cb=>{const id=++next;frames.set(id,cb);return id;},cancelAnimationFrame:id=>frames.delete(id),
  console:{warn(){}},
  loadGraphModule:async()=>({createConversationGraph(){
@@ -71,7 +73,7 @@ GRAPH_MOCKS = r"""
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import * as actualThree from './assets/vendor/three.module.js';
-let rendererCount=0,disposeCount=0,lossCount=0,sizeCalls=0,observers=0,failTexture=false;
+let rendererCount=0,disposeCount=0,lossCount=0,renderTargetCount=0,renderTargetDisposeCount=0,sizeCalls=0,observers=0,failTexture=false,failObserve=false;
 class Element {
  constructor(tag='div'){this.tag=tag;this.children=[];this.dataset={};this.style={setProperty(){}};
   this.classList={toggle(){}};this.handlers=new Map();this.offsetWidth=120;this.offsetHeight=28;}
@@ -91,9 +93,18 @@ const frames=new Map();let nextFrame=0;
 globalThis.requestAnimationFrame=fn=>{const id=++nextFrame;frames.set(id,fn);return id;};
 globalThis.cancelAnimationFrame=id=>frames.delete(id);
 globalThis.ResizeObserver=class {
- observe(){if(!this.observed){this.observed=true;observers++;}}
+ observe(){if(failObserve)throw new Error('observe failed');if(!this.observed){this.observed=true;observers++;}}
  disconnect(){if(this.observed){this.observed=false;observers--;}}
 };
+class TrackballControls {
+ constructor(camera,canvas){this.object=camera;this.canvas=canvas;this.target=new actualThree.Vector3();this.autoRotate=false;
+  this.minDistance=0;this.maxDistance=Infinity;this.minPolarAngle=0;this.maxPolarAngle=Math.PI;
+  this.minAzimuthAngle=-Infinity;this.maxAzimuthAngle=Infinity;}
+ update(){this.object.lookAt(this.target);return true;}
+ handleResize(){}
+ dispose(){}
+}
+globalThis.__TrackballControls=TrackballControls;
 function step(now){const callbacks=[...frames.values()];frames.clear();callbacks.forEach(fn=>fn(now));}
 class Renderer {
  constructor({canvas}){rendererCount++;this.canvas=canvas;this.ratio=1;this.geometries=new Set();this.textures=new Set();
@@ -103,6 +114,7 @@ class Renderer {
  setClearColor(){}
  setSize(w,h){sizeCalls++;this.canvas.width=w*this.ratio;this.canvas.height=h*this.ratio;}
  getContext(){return this.context;}
+ setRenderTarget(target){this.target=target;}
  render(scene,camera){
   scene.updateMatrixWorld(true);camera.updateMatrixWorld(true);
   scene.traverse(object=>{
@@ -120,12 +132,19 @@ class Renderer {
  dispose(){disposeCount++;this.geometries.clear();this.textures.clear();this.info.memory={geometries:0,textures:0};}
  forceContextLoss(){lossCount++;this.context.lost=true;}
 }
-globalThis.__three={...actualThree,WebGLRenderer:Renderer};
+class RenderTarget extends actualThree.WebGLRenderTarget {
+ constructor(...args){super(...args);renderTargetCount++;this.disposedForTest=false;}
+ dispose(){if(!this.disposedForTest){this.disposedForTest=true;renderTargetDisposeCount++;}super.dispose();}
+}
+globalThis.__three={...actualThree,WebGLRenderer:Renderer,WebGLRenderTarget:RenderTarget};
 const source=fs.readFileSync('graph-3d.js','utf8').replace('import * as THREE from "./assets/vendor/three.module.js";', 'const THREE=globalThis.__three;');
-const {createConversationGraph}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
-const original=[{id:'model',kind:'model',label:'Model',threadCount:2},
- {id:'t0',kind:'thread',label:'Task 0',state:'processing',modelId:'model',effort:'low',statusLabel:'Working',phaseLabel:'Reasoning'},
- {id:'t1',kind:'thread',label:'Task 1',state:'processing',modelId:'model',effort:'max',statusLabel:'Working',phaseLabel:'Tool'}];
+const executableSource=source.replace('import { TrackballControls } from "./assets/vendor/addons/controls/TrackballControls.js";', 'const TrackballControls=globalThis.__TrackballControls;');
+const {createConversationGraph}=await import('data:text/javascript;base64,'+Buffer.from(executableSource).toString('base64'));
+const original=[
+ {id:'t0',kind:'thread',cardId:'t0',label:'Task 0',state:'processing',working:true,shattered:false,
+  planetKey:'timber-hearth',planetSequence:0,effort:'low',statusLabel:'Working',phaseLabel:'Reasoning'},
+ {id:'t1',kind:'thread',cardId:'t1',label:'Task 1',state:'attention',working:false,shattered:false,
+  planetKey:'giants-deep',planetSequence:1,effort:'',statusLabel:'Watching',phaseLabel:'Watching'}];
 """
 
 
@@ -144,7 +163,6 @@ step(16);step(32);
 canvas.handlers.get('pointerdown')({clientX:0,clientY:0,pointerId:1});
 canvas.handlers.get('pointermove')({clientX:40,clientY:20,pointerId:1});
 canvas.handlers.get('pointerup')({pointerId:1});
-canvas.handlers.get('wheel')({deltaY:100,preventDefault(){}});
 graph.selectNode('t0');
 const before=graph.getDiagnostics(),initialSizeCalls=sizeCalls;
 const objects=[...graph.scene.children[0].children[0].children];
@@ -166,8 +184,76 @@ assert.equal(graph.getSelectedNode().label,'Updated 499');
 assert.equal(selected.at(-1),'Updated 499');
 graph.dispose();graph.dispose();
 assert.equal(disposeCount,1);assert.equal(lossCount,1);assert.equal(observers,0);assert.equal(frames.size,0);
+assert.equal(renderTargetCount,1);assert.equal(renderTargetDisposeCount,1);
 assert.equal(canvas.handlers.size,0);assert.equal(canvas.width,1);assert.equal(canvas.height,1);
 assert.equal(container.children.length,1);
+""")
+
+    def test_active_phase_is_shown_on_sun_not_working_planet(self):
+        self.run_graph(r"""
+const canvas=new Element('canvas'),container=new Element();container.append(canvas);
+const nodes=original.map(node=>node.id==='t0'
+ ? {...node,statusLabel:'处理中',phaseLabel:'推理中',modelLabel:'GPT-5.6-sol',runtimeLabel:'8秒'}
+ : node);
+const graph=createConversationGraph({canvas,container,nodes});graph.renderOnce(.05);
+assert.equal(graph.getDiagnostics().sunRadius,2.5,'sun is not 1.25x its previous radius');
+function descendants(node){return [node,...(node.children||[]).flatMap(descendants)]}
+const elements=descendants(container);
+const planetLabel=elements.find(item=>item.className?.includes('is-thread')&&item.dataset.graphLabel==='t0');
+const sunLabel=elements.find(item=>item.className?.includes('is-sun'));
+assert.ok(planetLabel);assert.ok(sunLabel);
+assert.equal(planetLabel.children[0].textContent,'Task 0');
+assert.equal(planetLabel.children[1].textContent,'','working planet repeated the active phase');
+assert.equal(sunLabel.children[1].textContent,'推理中 · 1 个任务');
+assert.equal(container.dataset.graphSunStatus,'推理中 · 1 个任务');
+graph.dispose();
+""")
+
+    def test_planet_rebirth_updates_one_node_without_rebuilding_scene(self):
+        self.run_graph(r"""
+const canvas=new Element('canvas'),container=new Element();container.append(canvas);
+const completed=original.map((node,index)=>({...node,working:false,state:'due',shattered:true,
+  completionToken:`turn-${index}`,statusLabel:'Done'}));
+const graph=createConversationGraph({canvas,container,nodes:completed});graph.renderOnce(.05);
+function descendants(node){return [node,...(node.children||[]).flatMap(descendants)]}
+const beforeLabel=descendants(container).find(item=>item.className?.includes('is-thread')&&item.dataset.graphLabel==='t0');
+const before=graph.getDiagnostics();
+const reborn=completed.map(node=>node.id==='t0'?{...node,shattered:false,state:'attention',completionToken:'',
+  planetKey:'dark-bramble',planetSequence:9,rebirthAt:Date.now(),statusLabel:'Watching'}:node);
+graph.update({nodes:reborn});graph.renderOnce(.05);
+const afterLabel=descendants(container).find(item=>item.className?.includes('is-thread')&&item.dataset.graphLabel==='t0');
+const after=graph.getDiagnostics(),state=after.nodeStates.find(node=>node.id==='t0');
+assert.equal(afterLabel,beforeLabel,'planet change rebuilt every graph label');
+assert.equal(rendererCount,1);assert.equal(lossCount,0);
+assert.deepEqual(after.camera,before.camera,'planet rebirth reset the camera');
+assert.equal(state.planetKey,'dark-bramble');
+assert.equal(state.lifecycle,'eject');
+graph.dispose();
+""")
+
+    def test_work_end_finale_and_next_start_rewind_without_renderer_rebuild(self):
+        self.run_graph(r"""
+const canvas=new Element('canvas'),container=new Element();container.append(canvas);
+const sampledAt=Date.now();
+const graph=createConversationGraph({canvas,container,nodes:original,
+ solarState:{mode:'working',event:'work-started',token:'start:1',dayProgress:.25,cycleOffsetMs:4*60*60*1000,sampledAt}});
+graph.renderOnce(.05);
+let state=graph.getDiagnostics();
+assert.equal(state.solarMode,'working');assert.ok(Math.abs(state.sunScale-2.8125)<.01);assert.equal(state.globalExplode,0);
+const beforeCamera=state.camera;
+graph.update({nodes:original,solarState:{mode:'destroyed',event:'work-ended',token:'end:2',dayProgress:.25,cycleOffsetMs:4*60*60*1000,sampledAt}});
+for(let index=0;index<170;index++)graph.renderOnce(.05);
+state=graph.getDiagnostics();
+assert.equal(state.solarMode,'destroyed');assert.equal(state.globalExplode,1);assert.ok(state.sunScale<.3);
+assert.ok(state.nodeStates.every(node=>node.explode>.99));
+graph.update({nodes:original.map(node=>({...node,shattered:false,completionToken:''})),
+ solarState:{mode:'working',event:'work-started',token:'start:3',dayProgress:.5,cycleOffsetMs:8*60*60*1000,sampledAt}});
+for(let index=0;index<170;index++)graph.renderOnce(.05);
+state=graph.getDiagnostics();
+assert.equal(state.solarMode,'working');assert.ok(Math.abs(state.sunScale-3.125)<.01);assert.equal(state.globalExplode,0);
+assert.ok(state.nodeStates.every(node=>node.explode<.01));
+assert.equal(rendererCount,1);assert.equal(lossCount,0);assert.deepEqual(state.camera,beforeCamera);
+graph.dispose();
 """)
 
     def test_structure_and_state_churn_disposes_old_scene_resources(self):
@@ -175,6 +261,7 @@ assert.equal(container.children.length,1);
 const canvas=new Element('canvas'),container=new Element();container.append(canvas);
 const graph=createConversationGraph({canvas,container,nodes:original});graph.renderOnce();
 const before=graph.getDiagnostics();
+assert.equal(container.dataset.graphSunStatus,'Reasoning · 1 个任务');
 for(let i=0;i<60;i++){
  graph.update({nodes:[original[0],{...original[1],state:'attention',modelId:null},
   {id:'new-'+i,kind:'thread',label:'Countdown',state:'countdown',statusLabel:'Waiting'}]});
@@ -184,7 +271,7 @@ for(let i=0;i<60;i++){
  assert.equal(graph.getDiagnostics().textures,before.textures);
 }
 assert.equal(rendererCount,1);assert.equal(lossCount,0);
-graph.selectNode('t0');graph.update({nodes:[original[0]]});
+graph.selectNode('t0');graph.update({nodes:[original[1]]});
 assert.equal(graph.getSelectedNode(),null);
 graph.setActive(false);assert.equal(frames.size,0);
 graph.setActive(true);graph.setActive(true);assert.equal(frames.size,1);
@@ -194,9 +281,89 @@ graph.dispose();assert.equal(lossCount,1);assert.equal(observers,0);
     def test_failed_initialization_releases_context_and_partial_resources(self):
         self.run_graph(r"""
 const canvas=new Element('canvas'),container=new Element();container.append(canvas);
-failTexture=true;
+failObserve=true;
 assert.throws(()=>createConversationGraph({canvas,container,nodes:original}));
 assert.equal(rendererCount,1);assert.equal(disposeCount,1);assert.equal(lossCount,1);
+assert.equal(renderTargetCount,1);assert.equal(renderTargetDisposeCount,1);
 assert.equal(frames.size,0);assert.equal(observers,0);assert.equal(canvas.handlers.size,0);
 assert.equal(container.children.length,1);assert.equal(canvas.width,1);
+""")
+
+    def test_completion_persists_as_cloud_until_recycled(self):
+        self.run_graph(r"""
+const canvas=new Element('canvas'),container=new Element();container.append(canvas);
+const recycled=[];
+const graph=createConversationGraph({canvas,container,nodes:original,onNodeRecycle:node=>{recycled.push(node.id);return true;}});
+graph.renderOnce(0.05);
+let initial=graph.getDiagnostics().nodeStates;
+assert.equal(initial.find(node=>node.id==='t0').scale,.5625,'working planet is not 1.5x its idle display size');
+assert.ok(Math.abs(initial.find(node=>node.id==='t1').scale-1.06875)<1e-9,'Giant Deep idle display scale is not 0.75x');
+const completed=original.map(node=>node.id==='t0'
+ ? {...node,state:'due',working:false,shattered:true,completionToken:'codex:turn-1',statusLabel:'Done'} : node);
+graph.update({nodes:completed});
+for(let i=0;i<40;i++)graph.renderOnce(0.05);
+let state=graph.getDiagnostics().nodeStates.find(node=>node.id==='t0');
+assert.equal(state.shattered,true);assert.ok(state.explode>.99);assert.equal(state.lifecycle,'');
+assert.ok(Math.abs(state.scale-.46875)<.001,'fragment cloud is not scaled proportionally to 1.875x');
+graph.update({nodes:completed.map(node=>node.id==='t0'?{...node,state:'attention'}:node)});
+for(let i=0;i<10;i++)graph.renderOnce(0.05);
+state=graph.getDiagnostics().nodeStates.find(node=>node.id==='t0');
+assert.equal(state.shattered,true,'clearing due incorrectly restored the cloud');
+assert.equal(graph.recycleNode('t0'),true);
+for(let i=0;i<24;i++)graph.renderOnce(0.05);
+await new Promise(setImmediate);
+assert.deepEqual(recycled,['t0']);
+graph.dispose();
+""")
+
+    def test_two_fragment_clouds_can_be_absorbed_concurrently(self):
+        self.run_graph(r"""
+const canvas=new Element('canvas'),container=new Element();container.append(canvas);
+const completed=original.map((node,index)=>({...node,working:false,state:'due',shattered:true,
+  completionToken:`turn-${index}`,statusLabel:'Done'}));
+const recycled=[];
+const graph=createConversationGraph({canvas,container,nodes:completed,onNodeRecycle:node=>{recycled.push(node.id);return true;}});
+graph.renderOnce(.05);
+assert.equal(graph.recycleNode('t0'),true);assert.equal(graph.recycleNode('t1'),true);
+let states=graph.getDiagnostics().nodeStates;
+assert.equal(states.find(node=>node.id==='t0').lifecycle,'absorbing');
+assert.equal(states.find(node=>node.id==='t1').lifecycle,'absorbing');
+for(let index=0;index<24;index++)graph.renderOnce(.05);
+await new Promise(setImmediate);
+assert.deepEqual(recycled.sort(),['t0','t1']);
+assert.equal(rendererCount,1);assert.equal(lossCount,0);
+graph.dispose();
+""")
+
+    def test_giants_deep_display_scale_is_halved_in_every_state(self):
+        self.run_graph(r"""
+const canvas=new Element('canvas'),container=new Element();container.append(canvas);
+const graph=createConversationGraph({canvas,container,nodes:original});graph.renderOnce(.05);
+let state=graph.getDiagnostics().nodeStates.find(node=>node.id==='t1');
+assert.ok(Math.abs(state.scale-1.06875)<1e-9,'idle scale');
+graph.update({nodes:original.map(node=>node.id==='t1'?{...node,working:true,state:'processing'}:node)});
+for(let i=0;i<60;i++)graph.renderOnce(.05);
+state=graph.getDiagnostics().nodeStates.find(node=>node.id==='t1');
+assert.ok(Math.abs(state.scale-1.603125)<.001,'working scale');
+graph.update({nodes:original.map(node=>node.id==='t1'?{...node,working:false,shattered:true,state:'due',completionToken:'timer:1'}:node)});
+for(let i=0;i<60;i++)graph.renderOnce(.05);
+state=graph.getDiagnostics().nodeStates.find(node=>node.id==='t1');
+assert.ok(Math.abs(state.scale-1.3359375)<.001,'fragment scale');
+graph.dispose();
+""")
+
+    def test_stranger_display_scale_is_three_quarters_in_every_state(self):
+        self.run_graph(r"""
+const canvas=new Element('canvas'),container=new Element();container.append(canvas);
+const stranger={...original[1],id:'stranger-task',planetKey:'stranger',planetSequence:7};
+const graph=createConversationGraph({canvas,container,nodes:[stranger]});graph.renderOnce(.05);
+let state=graph.getDiagnostics().nodeStates[0];
+assert.ok(Math.abs(state.scale-.9)<1e-9,'idle Stranger scale');
+graph.update({nodes:[{...stranger,working:true,state:'processing'}]});
+for(let index=0;index<60;index++)graph.renderOnce(.05);
+state=graph.getDiagnostics().nodeStates[0];assert.ok(Math.abs(state.scale-1.35)<.001,'working Stranger scale');
+graph.update({nodes:[{...stranger,working:false,shattered:true,state:'due',completionToken:'turn:1'}]});
+for(let index=0;index<60;index++)graph.renderOnce(.05);
+state=graph.getDiagnostics().nodeStates[0];assert.ok(Math.abs(state.scale-1.125)<.001,'fragment Stranger scale');
+graph.dispose();
 """)
