@@ -22,6 +22,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from background_events import BackgroundEventMonitor
 from codex_monitor import CodexRolloutMonitor, CodexStateUnavailable
 from feishu_notify import FeishuNotificationError, FeishuNotifier
 from widget_service import WidgetSnapshotStore, create_widget_server
@@ -1085,6 +1086,75 @@ for remote_spec in REMOTE_CODEX_SPECS:
 FEISHU_NOTIFIER: FeishuNotifier | None = None
 
 
+def _merge_codex_thread_metadata(
+    bridge: CodexBridge, thread_ids: list[str], statuses: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    summaries = bridge.cached_thread_summaries(thread_ids)
+    merged: list[dict[str, Any]] = []
+    for status in statuses:
+        current = dict(status)
+        summary = summaries.get(status.get("id"))
+        if summary:
+            current["name"] = summary.get("name") or current.get("name")
+            current["preview"] = summary.get("preview") or current.get("preview", "")
+        else:
+            current.pop("name", None)
+        merged.append(current)
+    return merged
+
+
+def codex_statuses(refs: list[dict[str, str]]) -> list[dict[str, Any]]:
+    normalized = [
+        ref
+        if isinstance(ref, dict)
+        else {"hostId": "local", "id": str(ref), "ref": str(ref)}
+        for ref in refs
+    ]
+    grouped: dict[str, list[str]] = {}
+    for ref in normalized:
+        grouped.setdefault(ref["hostId"], []).append(ref["id"])
+    statuses_by_key: dict[tuple[str, str], dict[str, Any]] = {}
+    for host_id, thread_ids in grouped.items():
+        bridge = CODEX_BRIDGE if host_id == "local" else REMOTE_CODEX_BRIDGES.get(host_id)
+        if bridge is None:
+            continue
+        try:
+            if host_id == "local":
+                statuses = CODEX_MONITOR.thread_statuses(thread_ids)
+            else:
+                statuses = bridge.thread_statuses(thread_ids)
+        except CodexStateUnavailable:
+            statuses = bridge.thread_statuses(thread_ids)
+        statuses = _merge_codex_thread_metadata(bridge, thread_ids, statuses)
+        for status in statuses:
+            status["hostId"] = host_id
+            status["sourceLabel"] = (
+                "本机" if host_id == "local" else REMOTE_CODEX_LABELS.get(host_id, host_id)
+            )
+            statuses_by_key[(host_id, str(status.get("id") or ""))] = status
+    return [
+        statuses_by_key[key]
+        for key in ((ref["hostId"], ref["id"]) for ref in normalized)
+        if key in statuses_by_key
+    ]
+
+
+def background_codex_statuses(
+    refs: list[dict[str, str]],
+) -> list[dict[str, Any]]:
+    """Keep one unavailable SSH host from blocking every other notification."""
+    grouped: dict[str, list[dict[str, str]]] = {}
+    for ref in refs:
+        grouped.setdefault(ref.get("hostId") or "local", []).append(ref)
+    statuses: list[dict[str, Any]] = []
+    for host_refs in grouped.values():
+        try:
+            statuses.extend(codex_statuses(host_refs))
+        except Exception:
+            continue
+    return statuses
+
+
 def get_feishu_notifier() -> FeishuNotifier:
     global FEISHU_NOTIFIER
     if FEISHU_NOTIFIER is None:
@@ -1294,31 +1364,7 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
         return threads
 
     def _codex_statuses(self, refs: list[dict[str, str]]) -> list[dict[str, Any]]:
-        refs = [
-            ref if isinstance(ref, dict) else {"hostId": "local", "id": str(ref), "ref": str(ref)}
-            for ref in refs
-        ]
-        grouped: dict[str, list[str]] = {}
-        for ref in refs:
-            grouped.setdefault(ref["hostId"], []).append(ref["id"])
-        statuses_by_key: dict[tuple[str, str], dict[str, Any]] = {}
-        for host_id, thread_ids in grouped.items():
-            bridge = CODEX_BRIDGE if host_id == "local" else REMOTE_CODEX_BRIDGES.get(host_id)
-            if bridge is None:
-                continue
-            try:
-                if host_id == "local":
-                    statuses = CODEX_MONITOR.thread_statuses(thread_ids)
-                else:
-                    statuses = bridge.thread_statuses(thread_ids)
-            except CodexStateUnavailable:
-                statuses = bridge.thread_statuses(thread_ids)
-            statuses = self._merge_codex_thread_metadata(bridge, thread_ids, statuses)
-            for status in statuses:
-                status["hostId"] = host_id
-                status["sourceLabel"] = "本机" if host_id == "local" else REMOTE_CODEX_LABELS.get(host_id, host_id)
-                statuses_by_key[(host_id, str(status.get("id") or ""))] = status
-        return [statuses_by_key[key] for key in ((ref["hostId"], ref["id"]) for ref in refs) if key in statuses_by_key]
+        return codex_statuses(refs)
 
     def _codex_work_log(self, parsed: urllib.parse.ParseResult) -> None:
         refs = self._thread_refs(parsed)[:MAX_REPORT_THREADS]
@@ -1362,18 +1408,7 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
     def _merge_codex_thread_metadata(
         bridge: CodexBridge, thread_ids: list[str], statuses: list[dict[str, Any]]
     ) -> list[dict[str, Any]]:
-        summaries = bridge.cached_thread_summaries(thread_ids)
-        merged: list[dict[str, Any]] = []
-        for status in statuses:
-            current = dict(status)
-            summary = summaries.get(status.get("id"))
-            if summary:
-                current["name"] = summary.get("name") or current.get("name")
-                current["preview"] = summary.get("preview") or current.get("preview", "")
-            else:
-                current.pop("name", None)
-            merged.append(current)
-        return merged
+        return _merge_codex_thread_metadata(bridge, thread_ids, statuses)
 
     def _write_sse(self, revision: int, statuses: list[dict[str, Any]]) -> None:
         payload = json.dumps(
@@ -1573,6 +1608,13 @@ def main() -> None:
     print("关闭这个窗口即可停止。")
     CODEX_MONITOR.start()
     get_feishu_notifier().start()
+    background_events = BackgroundEventMonitor(
+        store=get_business_store(),
+        status_provider=background_codex_statuses,
+        notifier=get_feishu_notifier(),
+        poll_interval=2,
+    )
+    background_events.start()
     widget_thread.start()
     threading.Timer(0.5, lambda: webbrowser.open(url)).start()
 
@@ -1584,6 +1626,7 @@ def main() -> None:
         widget_server.shutdown()
         widget_server.server_close()
         widget_thread.join(timeout=3)
+        background_events.close()
         CODEX_MONITOR.close()
         CODEX_BRIDGE.close()
         for bridge in REMOTE_CODEX_BRIDGES.values():

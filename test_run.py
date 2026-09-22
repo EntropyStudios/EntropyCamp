@@ -1153,6 +1153,22 @@ class CodexRolloutMonitorTests(unittest.TestCase):
 
 
 class ReminderHandlerThreadNameTests(unittest.TestCase):
+    def test_background_statuses_isolate_an_unavailable_remote_host(self):
+        refs = [
+            {"hostId": "local", "id": "local-id", "ref": "local-id"},
+            {"hostId": "ssh-test", "id": "remote-id", "ref": "ssh-test::remote-id"},
+        ]
+
+        def statuses_for_host(host_refs):
+            if host_refs[0]["hostId"] != "local":
+                raise RuntimeError("SSH unavailable")
+            return [{"hostId": "local", "id": "local-id", "status": "idle"}]
+
+        with mock.patch.object(reminder_run, "codex_statuses", side_effect=statuses_for_host):
+            statuses = reminder_run.background_codex_statuses(refs)
+
+        self.assertEqual(statuses, [{"hostId": "local", "id": "local-id", "status": "idle"}])
+
     def test_thread_reference_parser_keeps_ssh_host_separate(self):
         parsed = reminder_run.urllib.parse.urlparse(
             "/api/codex/status?id=local-id&id=ssh-192-168-100-255%3A%3Aremote-id"
