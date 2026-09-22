@@ -2100,6 +2100,36 @@ console.log(JSON.stringify({specs, repeat:createOrbitSpec('thread-0',0,12),
             self.assertNotEqual(before, after)
         self.assertGreater(data["comet"]["eccentricity"], max(s["eccentricity"] for s in data["specs"]))
 
+    def test_planets_have_distinct_deterministic_axial_rotation(self):
+        root = Path(__file__).parent
+        script = """
+import {createSpinSpec} from './graph-3d.js';
+const keys=['ash-twin','ember-twin','timber-hearth','attlerock','quantum-moon','brittle-hollow','hollows-lantern','stranger','giants-deep','dark-bramble','interloper'];
+const specs=keys.map(key=>createSpinSpec('thread-'+key,key));
+console.log(JSON.stringify({keys,specs,repeat:createSpinSpec('thread-timber-hearth','timber-hearth')}));
+"""
+        result = subprocess.run(
+            ["node", "--input-type=module", "-e", script],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        data = json.loads(result.stdout)
+        by_key = dict(zip(data["keys"], data["specs"]))
+        self.assertEqual(data["repeat"], by_key["timber-hearth"])
+        self.assertGreater(len({round(spec["speed"], 5) for spec in data["specs"]}), 8)
+        self.assertTrue(any(spec["speed"] < 0 for spec in data["specs"]))
+        self.assertTrue(any(spec["speed"] > 0 for spec in data["specs"]))
+        self.assertGreater(abs(by_key["interloper"]["tiltZ"]), 0.5)
+        self.assertGreater(abs(by_key["stranger"]["speed"]), abs(by_key["dark-bramble"]["speed"]))
+
+        graph = (root / "graph-3d.js").read_text(encoding="utf-8")
+        self.assertIn("spinPivot.add(visual)", graph)
+        self.assertIn("data.spinAngle += delta * data.spinSpec.speed", graph)
+        self.assertNotIn("!selectedId) data.visual.rotation.y", graph)
+        self.assertIn("spinSpeed: group.userData.spinSpec.speed", graph)
+
     def test_outer_orbits_are_compressed_and_apoapsis_stays_visible(self):
         root = Path(__file__).parent
         script = """

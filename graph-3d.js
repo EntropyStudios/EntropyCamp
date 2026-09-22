@@ -4,17 +4,21 @@ import { TrackballControls } from "./assets/vendor/addons/controls/TrackballCont
 let rendererGeneration = 0;
 
 const PLANET_SPECS = Object.freeze({
-  "ash-twin": { radius: 0.2, axis: 5.0, color: 0xc9a46b },
-  "ember-twin": { radius: 0.2, axis: 5.7, color: 0xd16b48 },
-  "timber-hearth": { radius: 0.25, axis: 8.593, color: 0x76aa87 },
-  attlerock: { radius: 0.1, axis: 9.65, color: 0xa7b1b4 },
-  "quantum-moon": { radius: 0.11, axis: 10.595, color: 0xdad6c9 },
-  "brittle-hollow": { radius: 0.3, axis: 11.691, color: 0x6eaac1 },
-  "hollows-lantern": { radius: 0.13, axis: 13.05, color: 0xf08b55 },
-  stranger: { radius: 0.8, displayScale: 0.75, axis: 14.4, color: 0x99adb8 },
-  "giants-deep": { radius: 0.95, displayScale: 0.75, axis: 16.458, color: 0x8baa9c },
-  "dark-bramble": { radius: 0.65, axis: 20.0, color: 0xa9c6cf },
-  interloper: { radius: 0.11, axis: 24.1, color: 0xcadbe1, comet: true },
+  "ash-twin": { radius: 0.2, axis: 5.0, color: 0xc9a46b, spinPeriod: 68, axialTilt: 8 },
+  "ember-twin": { radius: 0.2, axis: 5.7, color: 0xd16b48, spinPeriod: 82, axialTilt: -11 },
+  "timber-hearth": { radius: 0.25, axis: 8.593, color: 0x76aa87, spinPeriod: 56, axialTilt: 18 },
+  attlerock: { radius: 0.1, axis: 9.65, color: 0xa7b1b4, spinPeriod: 72, axialTilt: 23 },
+  "quantum-moon": { radius: 0.11, axis: 10.595, color: 0xdad6c9, spinPeriod: -43, axialTilt: 31 },
+  "brittle-hollow": { radius: 0.3, axis: 11.691, color: 0x6eaac1, spinPeriod: 64, axialTilt: -17 },
+  "hollows-lantern": { radius: 0.13, axis: 13.05, color: 0xf08b55, spinPeriod: 18, axialTilt: 12 },
+  stranger: { radius: 0.8, displayScale: 0.75, axis: 14.4, color: 0x99adb8, spinPeriod: 28, axialTilt: 26 },
+  "giants-deep": { radius: 0.95, displayScale: 0.75, axis: 16.458, color: 0x8baa9c, spinPeriod: 34, axialTilt: -21 },
+  "dark-bramble": { radius: 0.65, axis: 20.0, color: 0xa9c6cf, spinPeriod: 90, axialTilt: 15 },
+  interloper: { radius: 0.11, axis: 24.1, color: 0xcadbe1, comet: true, spinPeriod: 22, axialTilt: 67 },
+});
+const SPECIAL_SPIN_SPECS = Object.freeze({
+  sun: { spinPeriod: 48, axialTilt: 7 },
+  "white-hole": { spinPeriod: 0, axialTilt: 0 },
 });
 const PLANET_SCALE = Object.freeze({ idle: 1.5, working: 2.25, shattered: 1.875 });
 const POINTER_BLACK_HOLE_RADIUS = 13.05;
@@ -50,6 +54,17 @@ function textSeed(value, salt = 0) {
   let hash = (2166136261 + salt) >>> 0;
   for (const character of String(value || "")) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619) >>> 0;
   return hash / 0xffffffff;
+}
+
+export function createSpinSpec(id, planetKey) {
+  const source = PLANET_SPECS[planetKey] || SPECIAL_SPIN_SPECS[planetKey] || {};
+  const period = Number(source.spinPeriod) || 0;
+  return {
+    speed: period ? Math.PI * 2 / period : 0,
+    phase: textSeed(id, 1193) * Math.PI * 2,
+    tiltX: (textSeed(planetKey, 1289) - 0.5) * 0.16,
+    tiltZ: THREE.MathUtils.degToRad(Number(source.axialTilt) || 0),
+  };
 }
 
 export function createOrbitSpec(id, index, count, comet = false, planetKey = "", sequence = index) {
@@ -750,8 +765,12 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
 
   function createSpecialBody(key, radius, position, label, special) {
     const group = new THREE.Group(); group.position.copy(position);
-    const visual = new THREE.Group(); visual.scale.setScalar(radius); visual.add(placeholderVisual(special === "sun" ? 0xffaa4d : 0xbdeeff));
-    group.add(visual); graphLayer.add(group);
+    const spinPivot = new THREE.Group(), visual = new THREE.Group();
+    const spinSpec = createSpinSpec(special, key);
+    spinPivot.rotation.set(spinSpec.tiltX, 0, spinSpec.tiltZ);
+    visual.rotation.y = spinSpec.phase;
+    visual.scale.setScalar(radius); visual.add(placeholderVisual(special === "sun" ? 0xffaa4d : 0xbdeeff));
+    spinPivot.add(visual); group.add(spinPivot); graphLayer.add(group);
     let halo = null, light = null;
     if (special === "sun") {
       halo = createSunHalo(); group.add(halo);
@@ -762,7 +781,8 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
     const node = { id: special, kind: special, label, statusLabel: special === "sun" ? "任务核心" : "回收出口" };
     const specialUniforms = { explode: { value: 0 }, time: { value: 0 }, cloudRadius: { value: 0 }, brightness: { value: 1 },
       evolution: { value: 0 }, collapse: { value: 0 } };
-    group.userData = { node, radius, currentScale: radius, visual, halo, light, specialUniforms, label: createLabel(labelLayer, node), special };
+    group.userData = { node, radius, currentScale: radius, spinPivot, spinSpec, spinAngle: spinSpec.phase,
+      visual, halo, light, specialUniforms, label: createLabel(labelLayer, node), special };
     attachAsset(visual, key, specialUniforms, special);
     if (special === "sun") {
       prominenceSystem = createProminenceSystem(group, camera, prominenceLibrary);
@@ -787,16 +807,20 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
     const planet = PLANET_SPECS[node.planetKey] || PLANET_SPECS["timber-hearth"];
     const displayRadius = planetDisplayRadius(planet);
     const orbit = createOrbitSpec(node.id, index, count, planet.comet, node.planetKey, node.planetSequence);
-    const group = new THREE.Group(), visual = new THREE.Group();
+    const group = new THREE.Group(), spinPivot = new THREE.Group(), visual = new THREE.Group();
+    const spinSpec = createSpinSpec(node.id, node.planetKey);
+    spinPivot.rotation.set(spinSpec.tiltX, 0, spinSpec.tiltZ);
+    visual.rotation.y = spinSpec.phase;
     const uniforms = { explode: { value: node.shattered ? 1 : 0 }, time: { value: 0 }, cloudRadius: { value: 0.65 }, brightness: { value: node.shattered ? 0.9 : node.working ? 1 : 0.55 } };
-    visual.add(placeholderVisual(planet.color)); group.add(visual);
+    visual.add(placeholderVisual(planet.color)); spinPivot.add(visual); group.add(spinPivot);
     const hitMesh = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
     hitMesh.userData.graphNode = node; group.add(hitMesh);
     const targetScale = displayRadius * planetScale(node);
     visual.scale.setScalar(targetScale);
     hitMesh.scale.setScalar(node.shattered ? Math.max(0.675, displayRadius * 3.375) : Math.max(0.33, targetScale));
     group.position.copy(orbitPoint(orbit, orbitElapsed));
-    group.userData = { node, orbit, radius: planet.radius, displayRadius, visual, hitMesh, uniforms, currentScale: targetScale, targetScale,
+    group.userData = { node, orbit, radius: planet.radius, displayRadius, spinPivot, spinSpec, spinAngle: spinSpec.phase,
+      visual, hitMesh, uniforms, currentScale: targetScale, targetScale,
       currentBrightness: uniforms.brightness.value, targetBrightness: uniforms.brightness.value,
       label: createLabel(labelLayer, node), lifecycle: null, recycled: false };
     graphLayer.add(group); nodeGroups.push(group); pickables.push(hitMesh); createConnection(group);
@@ -852,6 +876,10 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
       group.userData.radius = planet.radius;
       group.userData.displayRadius = planetDisplayRadius(planet);
       group.userData.orbit = createOrbitSpec(node.id, index, count, planet.comet, node.planetKey, node.planetSequence);
+      group.userData.spinSpec = createSpinSpec(node.id, node.planetKey);
+      group.userData.spinAngle = group.userData.spinSpec.phase;
+      group.userData.spinPivot.rotation.set(group.userData.spinSpec.tiltX, 0, group.userData.spinSpec.tiltZ);
+      group.userData.visual.rotation.y = group.userData.spinAngle;
       attachAsset(group.userData.visual, node.planetKey || "timber-hearth", group.userData.uniforms);
       if (!group.userData.lifecycle || group.userData.lifecycle.type !== "absorbing") {
         group.userData.lifecycle = reducedMotion ? null : {
@@ -1174,8 +1202,18 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
     data.visual.scale.setScalar(Math.max(0.001, data.currentScale * scaleMultiplier));
     const hitRadius = node.shattered ? Math.max(0.675, data.displayRadius * 3.375) : Math.max(0.33, data.currentScale);
     data.hitMesh.scale.setScalar(Math.max(0.001, hitRadius * scaleMultiplier));
-    if (!reducedMotion && !selectedId) data.visual.rotation.y += delta * (node.shattered ? 0.09 : 0.035);
+    if (!reducedMotion) {
+      data.spinAngle += delta * data.spinSpec.speed * (node.shattered ? 0.35 : 1);
+      data.visual.rotation.y = data.spinAngle;
+    }
     updateConnection(data.edge);
+  }
+
+  function updateSpecialBodySpin(group, delta) {
+    const data = group?.userData;
+    if (!data?.spinSpec || reducedMotion) return;
+    data.spinAngle += delta * data.spinSpec.speed;
+    data.visual.rotation.y = data.spinAngle;
   }
 
   function updateSunStatus() {
@@ -1212,6 +1250,7 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
     wallElapsed += delta; if (!reducedMotion) orbitElapsed += delta;
     controls.update(); zoom = camera.position.distanceTo(controls.target) / fitDistance;
     updateSolarCycle(delta);
+    updateSpecialBodySpin(sunGroup, delta);
     nodeGroups.forEach((group) => updateTask(group, delta));
     updateSunStatus();
     [sunGroup, whiteHoleGroup].forEach((group) => group?.userData.visual?.traverse((object) => {
@@ -1241,6 +1280,9 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
       interiorShards: group.userData.visual.userData.interiorShardLayer?.userData.count || 0,
       interiorCoreShards: group.userData.visual.userData.interiorShardLayer?.userData.coreCount || 0,
       fragmentStyle: group.userData.visual.userData.interiorShardLayer?.userData.style || "",
+      spinAngle: group.userData.spinAngle,
+      spinSpeed: group.userData.spinSpec.speed,
+      spinTilt: [group.userData.spinSpec.tiltX, group.userData.spinSpec.tiltZ],
       lifecycle: group.userData.lifecycle?.type || "",
     })));
     container.dataset.graphActiveLinks = String(edges.filter((edge) => edge.line.visible).length);
