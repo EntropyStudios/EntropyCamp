@@ -31,6 +31,7 @@ const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const ORBIT_OUTER_PIVOT = 12;
 const ORBIT_OUTER_COMPRESSION = 0.62;
 const MAX_ORBIT_APOAPSIS = 24;
+const ORBIT_SPEED_MULTIPLIER = 2;
 
 const EFFORT_COLORS = {
   minimal: 0x5aa9ff, low: 0x5aa9ff, medium: 0x46d5d1,
@@ -85,7 +86,7 @@ export function createOrbitSpec(id, index, count, comet = false, planetKey = "",
     tilt: (textSeed(id, 337) - 0.5) * 0.92,
     node: textSeed(id, 701) * Math.PI * 2,
     phase: (index / Math.max(1, count)) * Math.PI * 2 + seed * 0.62,
-    speed: (isComet ? 0.031 : 0.022) / Math.sqrt(semiMajor),
+    speed: (isComet ? 0.031 : 0.022) * ORBIT_SPEED_MULTIPLIER / Math.sqrt(semiMajor),
     eccentricity,
   };
 }

@@ -2099,6 +2099,8 @@ console.log(JSON.stringify({specs, repeat:createOrbitSpec('thread-0',0,12),
         for before, after in zip(data["before"], data["after"]):
             self.assertNotEqual(before, after)
         self.assertGreater(data["comet"]["eccentricity"], max(s["eccentricity"] for s in data["specs"]))
+        self.assertAlmostEqual(data["specs"][0]["speed"], 0.044 / data["specs"][0]["semiMajor"] ** 0.5)
+        self.assertAlmostEqual(data["comet"]["speed"], 0.062 / data["comet"]["semiMajor"] ** 0.5)
 
     def test_planets_have_distinct_deterministic_axial_rotation(self):
         root = Path(__file__).parent
