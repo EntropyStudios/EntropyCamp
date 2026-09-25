@@ -1283,6 +1283,16 @@
           </div>
           <div class="title-group">
             <h1>提醒</h1>
+            <div class="reminder-view-switch" id="reminderViewSwitch" role="group" aria-label="提醒页面显示模式">
+              <button type="button" data-reminder-view="cards" aria-pressed="false" title="切换到卡片模式">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
+                <span>卡片</span>
+              </button>
+              <button type="button" data-reminder-view="cosmos" aria-pressed="false" title="切换到星际拓荒模式">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"></circle><ellipse cx="12" cy="12" rx="9" ry="4.5"></ellipse><path d="M8.2 3.8c2.3 1.1 4.8 3.4 6.6 6.2 1.8 2.9 2.5 5.9 1.9 8.3"></path></svg>
+                <span>星际</span>
+              </button>
+            </div>
             <div class="work-summary" id="workSummary" aria-live="polite">
               <span>未上班</span>
               <strong>0</strong>

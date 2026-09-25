@@ -45,7 +45,7 @@ const context={grid,document:{hidden:false,body:{classList:classes()}},Date,Map,
  }}),
 };
 vm.createContext(context);
-vm.runInContext('let conversationGraphController=null,conversationGraphMountVersion=0,conversationGraphMountPromise=null,conversationGraphPending=null,conversationGraphRenderFrame=0,conversationGraphDisposed=false;\n'+
+vm.runInContext('let reminderViewMode="cosmos",conversationGraphController=null,conversationGraphMountVersion=0,conversationGraphMountPromise=null,conversationGraphPending=null,conversationGraphRenderFrame=0,conversationGraphDisposed=false;\n'+
  extract('mountConversationGraph').replace('await import("./graph-3d.js")','await loadGraphModule()')+'\n'+extract('render'),context);
 async function paint(){const batch=[...frames.values()];frames.clear();batch.forEach(cb=>cb(16));await new Promise(setImmediate);}
 (async()=>{

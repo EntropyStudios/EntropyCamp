@@ -1945,6 +1945,24 @@ console.log(JSON.stringify({ sorted, original: cards.map((card) => card.id) }));
 
 
 class GraphLayoutTests(unittest.TestCase):
+    def test_home_can_switch_between_cards_and_outer_wilds_scene(self):
+        root = Path(__file__).parent
+        html = (root / "index.html").read_text(encoding="utf-8")
+        app = (root / "app.js").read_text(encoding="utf-8")
+        css = (root / "styles.css").read_text(encoding="utf-8")
+
+        self.assertIn('id="reminderViewSwitch"', html)
+        self.assertIn('data-reminder-view="cards"', html)
+        self.assertIn('data-reminder-view="cosmos"', html)
+        self.assertIn('const REMINDER_VIEW_KEY = "entropycamp-reminder-view-v1"', app)
+        self.assertIn("function reminderCardsMarkup(sorted, now)", app)
+        self.assertIn("function disposeConversationGraph()", app)
+        self.assertIn('grid.classList.remove("card-graph")', app)
+        self.assertIn('grid.classList.add("card-mode")', app)
+        self.assertIn('localStorage.setItem(REMINDER_VIEW_KEY, mode)', app)
+        self.assertIn(".reminder-view-switch", css)
+        self.assertIn(".card-grid.card-mode .empty-state", css)
+
     def test_graph_uses_beijing_solar_cycle_official_prominences_and_work_transitions(self):
         root = Path(__file__).parent
         html = (root / "index.html").read_text(encoding="utf-8")
