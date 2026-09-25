@@ -8,6 +8,7 @@ const DAILY_QUOTE_KEY = "lumen-reminder-hourly-quote-v1";
 const WEATHER_CACHE_KEY = "lumen-reminder-weather-v1";
 const HEADER_CLOCK_KEY = "lumen-reminder-header-clock-v1";
 const WIDGET_SOURCE_KEY = "lumen-reminder-widget-source-v1";
+const REMINDER_VIEW_KEY = "entropycamp-reminder-view-v1";
 const UNIT_MS = {
   minute: 60 * 1000,
   hour: 60 * 60 * 1000,
@@ -23,6 +24,7 @@ let cards = loadCards();
 let planetAssignmentsNeedSave = planetVisualCore.ensureAssignments(cards);
 let workSession = loadWorkSession();
 let workHistoryStore = loadWorkHistory();
+let reminderViewMode = loadReminderViewMode();
 let codexThreads = [];
 let codexAvailable = false;
 let codexSyncing = false;
@@ -250,6 +252,7 @@ let conversationGraphRenderFrame = 0;
 let conversationGraphDisposed = false;
 
 const grid = document.querySelector("#cardGrid");
+const reminderViewSwitch = document.querySelector("#reminderViewSwitch");
 const dialog = document.querySelector("#cardDialog");
 const form = document.querySelector("#cardForm");
 const workSummary = document.querySelector("#workSummary");
@@ -592,6 +595,25 @@ function formatCountdown(timestamp) {
   const days = Math.floor(hours / 24);
   const restHours = hours % 24;
   return restHours ? `${days} 天 ${restHours} 小时后` : `${days} 天后`;
+}
+
+function loadReminderViewMode() {
+  try {
+    const saved = localStorage.getItem(REMINDER_VIEW_KEY);
+    return saved === "cards" || saved === "cosmos" ? saved : "cosmos";
+  } catch {
+    return "cosmos";
+  }
+}
+
+function updateReminderViewControls() {
+  document.body.dataset.reminderView = reminderViewMode;
+  grid?.setAttribute("aria-label", reminderViewMode === "cards" ? "提醒卡片" : "星际拓荒任务场景");
+  reminderViewSwitch?.querySelectorAll("[data-reminder-view]").forEach((button) => {
+    const active = button.dataset.reminderView === reminderViewMode;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
 }
 
 function pad2(value) {
@@ -4103,6 +4125,75 @@ function bubbleMarkup(card, now = Date.now(), modelKeys = new Map()) {
     </article>`;
 }
 
+function reminderCardMarkup(card, now, { focus = false, compact = false } = {}) {
+  const rawState = getCardState(card, now);
+  const state = graphState(card, now);
+  const linked = Boolean(card.codexThreadId);
+  const due = state === "due";
+  const actionable = workSession.active && (due || rawState === "idle");
+  const hostLabel = card.codexHost && card.codexHost !== "local" ? "SSH" : "本机";
+  const phaseStartedAt = Number(card.codexActivityStartedAt) || null;
+  const runtime = formatElapsedSince(phaseStartedAt, now);
+  const stateClass = due ? "due" : linked ? (rawState === "codex-paused" ? "paused" : "codex") : rawState;
+  const statusText = linked
+    ? due
+      ? "有新回复"
+      : state === "processing"
+        ? graphPhaseLabel(card, state)
+        : rawState === "codex-paused"
+          ? "提醒已暂停"
+          : "保持关注"
+    : rawState === "paused"
+      ? "提醒已暂停"
+      : rawState === "idle"
+        ? "点击开始"
+        : due
+          ? "现在"
+          : formatCountdown(card.nextAt);
+  const source = linked
+    ? [hostLabel, card.codexModel ? modelDisplayLabel(card.codexModel) : "Codex"].join(" · ")
+    : card.tag || "提醒";
+  const classes = [
+    "card",
+    `is-${stateClass}`,
+    state === "processing" ? "is-processing" : "",
+    focus ? "is-focus" : "",
+    compact ? "is-compact" : "",
+  ].filter(Boolean).join(" ");
+  return `
+    <article class="${classes}" data-card-id="${escapeHtml(card.id)}" tabindex="${actionable ? "0" : "-1"}" aria-label="${escapeHtml(card.title)}，${escapeHtml(statusText)}">
+      <div class="card-head">
+        <span class="tag">${escapeHtml(linked ? hostLabel : card.tag || "提醒")}</span>
+        <button class="edit-button" type="button" data-edit-card="${escapeHtml(card.id)}" aria-label="编辑 ${escapeHtml(card.title)}" title="编辑">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"></path></svg>
+        </button>
+      </div>
+      <h2>${escapeHtml(card.title)}</h2>
+      <div class="card-time">
+        <small>${linked ? "对话状态" : rawState === "idle" ? "提醒" : "剩余时间"}</small>
+        <strong class="countdown"${!linked && rawState === "running" ? ` data-countdown="${escapeHtml(card.id)}"` : ""}>${escapeHtml(statusText)}</strong>
+        ${linked && runtime ? `<span class="card-runtime" data-bubble-runtime="${escapeHtml(card.id)}" data-phase-start="${phaseStartedAt}">${escapeHtml(runtime)}</span>` : ""}
+      </div>
+      <div class="card-foot">
+        <span>${escapeHtml(source)}</span>
+        <span>${linked ? `本班 ${workCountForCard(card)} 次` : `每 ${escapeHtml(intervalText(card))}`}</span>
+      </div>
+      ${due ? '<span class="due-hint">点击标记已读</span>' : rawState === "idle" ? '<span class="card-start-hint">点击开始计时</span>' : ""}
+    </article>`;
+}
+
+function reminderCardsMarkup(sorted, now) {
+  if (!sorted.length) {
+    return '<div class="empty-state"><strong>还没有提醒</strong><span>新建提醒或关联 Codex 对话后会显示在这里</span></div>';
+  }
+  const dueCards = sorted.filter((card) => getCardState(card, now) === "due");
+  if (!dueCards.length) return sorted.map((card) => reminderCardMarkup(card, now)).join("");
+  const secondaryCards = sorted.filter((card) => !dueCards.includes(card));
+  return `
+    <div class="focus-stage">${dueCards.map((card) => reminderCardMarkup(card, now, { focus: true })).join("")}</div>
+    ${secondaryCards.length ? `<div class="card-dock">${secondaryCards.map((card) => reminderCardMarkup(card, now, { compact: true })).join("")}</div>` : ""}`;
+}
+
 function graphMarkup(sorted, now) {
   const modelKeys = new Map();
   const models = [];
@@ -4290,6 +4381,42 @@ async function mountConversationGraph(sorted, now = Date.now()) {
   return conversationGraphMountPromise;
 }
 
+function disposeConversationGraph() {
+  conversationGraphMountVersion += 1;
+  conversationGraphMountPromise = null;
+  conversationGraphPending = null;
+  cancelAnimationFrame(conversationGraphRenderFrame);
+  conversationGraphRenderFrame = 0;
+  conversationGraphController?.dispose?.();
+  conversationGraphController = null;
+  grid.classList.remove("is-3d-ready", "is-3d-fallback");
+}
+
+function setReminderViewMode(mode, { persist = true, animate = true } = {}) {
+  if (!new Set(["cards", "cosmos"]).has(mode)) return;
+  const changed = reminderViewMode !== mode;
+  reminderViewMode = mode;
+  if (persist) {
+    try {
+      localStorage.setItem(REMINDER_VIEW_KEY, mode);
+    } catch {
+      // The mode remains available for this page when storage is unavailable.
+    }
+  }
+  updateReminderViewControls();
+  if (!changed) return;
+  render({ animate: false });
+  if (animate && !shouldReduceMotion() && typeof grid.animate === "function") {
+    grid.animate(
+      [
+        { opacity: 0.22, transform: "translateY(7px) scale(0.995)" },
+        { opacity: 1, transform: "translateY(0) scale(1)" },
+      ],
+      { duration: 360, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+    );
+  }
+}
+
 function updateGraphRuntimeLabels(now = Date.now()) {
   document.querySelectorAll("[data-bubble-runtime]").forEach((element) => {
     element.textContent = formatElapsedSince(element.dataset.phaseStart, now);
@@ -4417,8 +4544,19 @@ function render(options = {}) {
   document.body.classList.toggle("has-due-reminders", dueCards.length > 0);
   grid.classList.toggle("has-due", dueCards.length > 0);
   grid.classList.toggle("has-secondary", sorted.length > dueCards.length);
-  grid.classList.add("card-graph");
   grid.dataset.dueCount = String(dueCards.length);
+  if (reminderViewMode === "cards") {
+    if (conversationGraphController || conversationGraphMountPromise || conversationGraphRenderFrame || grid.querySelector("[data-graph-3d-shell]")) {
+      disposeConversationGraph();
+    }
+    grid.classList.remove("card-graph");
+    grid.classList.add("card-mode");
+    grid.innerHTML = reminderCardsMarkup(sorted, now);
+    animateCardLayout(previousRects);
+    return;
+  }
+  grid.classList.remove("card-mode");
+  grid.classList.add("card-graph");
   if (!grid.querySelector("[data-graph-3d-shell]")) grid.innerHTML = graph3DMarkup(sorted, now);
   conversationGraphPending = { sorted, now, nodes: graph3DNodes(sorted, now), solarState: graph3DSolarState(now), reducedMotion: shouldReduceMotion() };
   if (conversationGraphRenderFrame) return;
@@ -5040,6 +5178,10 @@ document.querySelector("#cancelDialogButton").addEventListener("click", closeDia
 document.querySelector("#deleteCardButton").addEventListener("click", deleteCard);
 document.querySelector("#codexThread").addEventListener("change", updateReminderMode);
 form.addEventListener("submit", saveCard);
+reminderViewSwitch?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-reminder-view]");
+  if (button) setReminderViewMode(button.dataset.reminderView);
+});
 
 dialog.addEventListener("click", (event) => {
   if (event.target === dialog) closeDialog();
@@ -5090,6 +5232,10 @@ grid.addEventListener("keydown", (event) => {
 window.addEventListener("resize", updateGraphConnections);
 
 window.addEventListener("storage", (event) => {
+  if (event.key === REMINDER_VIEW_KEY && (event.newValue === "cards" || event.newValue === "cosmos")) {
+    setReminderViewMode(event.newValue, { persist: false });
+    return;
+  }
   if (event.key === HEADER_CLOCK_KEY) {
     headerClockDayKey = null;
     ensureDailyHeaderClock(true);
@@ -5156,8 +5302,10 @@ window.addEventListener("pagehide", () => {
 window.addEventListener("pageshow", (event) => {
   if (!event.persisted) return;
   conversationGraphDisposed = false;
+  reminderViewMode = loadReminderViewMode();
+  updateReminderViewControls();
   grid.classList.remove("is-3d-ready", "is-3d-fallback");
-  grid.innerHTML = graph3DMarkup(cards, Date.now());
+  grid.innerHTML = reminderViewMode === "cosmos" ? graph3DMarkup(cards, Date.now()) : "";
   startCorpusClockAnimation();
   conversationGraphController?.setActive?.(!document.hidden);
   render({ animate: false });
@@ -5173,6 +5321,7 @@ if (planetAssignmentsNeedSave) {
 ensureDailyHeaderClock(true);
 revealHeaderClockAfterHydration();
 startCorpusClockAnimation();
+updateReminderViewControls();
 render({ animate: false });
 if (new URLSearchParams(window.location.search).get("reflectionPreview") === "1") {
   openWorkReflectionDialog({ preview: true });
