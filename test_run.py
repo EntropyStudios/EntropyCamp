@@ -299,6 +299,7 @@ const window = {
   matchMedia: () => ({ matches: false }),
   SolarCycleCore: { stateForSession: () => ({ mode: "day", token: "", dayProgress: 0, sampledAt: Date.now() }) },
   PlanetVisualCore: { PLANET_KEYS: [], ensureAssignments: () => false, rerollAssignments: () => false },
+  TodoCore: { STORE_VERSION: 1, normalizeStore: () => ({ version: 1, updatedAt: 0, items: [] }) },
 };
 const context = {
   console, Date, Intl, Math, Number, String, Object, Array, Map, Set, JSON,
@@ -1889,6 +1890,38 @@ console.log(JSON.stringify(core.parseMarkdown(source)));
         self.assertIn("@media (prefers-reduced-motion: reduce)", css)
         self.assertIn("card.animate(", script)
         self.assertIn("textContent = item.content", script)
+        self.assertNotIn("innerHTML", script)
+
+
+class TodoPageTests(unittest.TestCase):
+    def test_home_strip_and_todo_page_share_persistent_store(self):
+        root = Path(__file__).parent
+        index = (root / "index.html").read_text(encoding="utf-8")
+        html = (root / "todo.html").read_text(encoding="utf-8")
+        app = (root / "app.js").read_text(encoding="utf-8")
+        script = (root / "todo.js").read_text(encoding="utf-8")
+        css = (root / "todo.css").read_text(encoding="utf-8")
+        state_client = (root / "state-client.js").read_text(encoding="utf-8")
+
+        for element_id in ("todayTodoStrip", "todayTodoItems", "quickTodoForm", "quickTodoTitle"):
+            self.assertIn(f'id="{element_id}"', index)
+        self.assertIn('href="todo.html?view=today"', index)
+        self.assertLess(index.index('src="todo-core.js"'), index.index('src="state-client.js"'))
+        self.assertIn('const TODOS_KEY = "lumen-todos-v1"', app)
+        self.assertIn("renderTodayTodoStrip()", app)
+        self.assertIn("completeHomeTodo", app)
+
+        for element_id in ("todoList", "newTodoButton", "todoDialog", "todoTitle", "todoSection", "todoPriority"):
+            self.assertIn(f'id="{element_id}"', html)
+        for view in ("today", "inbox", "later", "completed"):
+            self.assertIn(f'data-todo-view="{view}"', html)
+        self.assertLess(html.index('src="todo-core.js"'), html.index('src="state-client.js"'))
+        self.assertIn('"lumen-todos-v1"', state_client)
+        self.assertIn("businessState.subscribe", script)
+        self.assertIn("core.moveItem", script)
+        self.assertIn("row.animate(", script)
+        self.assertRegex(css, r"\.todo-row\s*\{[^}]*display:\s*grid")
+        self.assertIn("@media (prefers-reduced-motion: reduce)", css)
         self.assertNotIn("innerHTML", script)
 
 

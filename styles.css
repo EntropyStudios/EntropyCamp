@@ -3603,6 +3603,173 @@ main {
   padding-top: 32px;
 }
 
+.today-todo-strip {
+  display: grid;
+  min-height: 52px;
+  grid-template-columns: auto minmax(0, 1fr) minmax(170px, 220px);
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 8px 0 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.085);
+}
+
+.today-todo-heading {
+  display: inline-flex;
+  min-width: 116px;
+  align-items: center;
+  gap: 7px;
+  color: rgba(245, 245, 247, 0.82);
+  font-size: 10px;
+  text-decoration: none;
+}
+
+.today-todo-heading svg {
+  width: 15px;
+  height: 15px;
+}
+
+.today-todo-heading strong {
+  font-weight: 680;
+}
+
+.today-todo-heading span {
+  min-width: 25px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.075);
+  color: rgba(245, 245, 247, 0.46);
+  font-size: 8px;
+  text-align: center;
+}
+
+.today-todo-items {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.today-todo-item {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 190px;
+  height: 32px;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(245, 245, 247, 0.68);
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.today-todo-item:hover,
+.today-todo-item:focus-visible {
+  border-color: rgba(255, 255, 255, 0.27);
+  background: rgba(255, 255, 255, 0.065);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
+.today-todo-check {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+}
+
+.today-todo-item.is-high .today-todo-check {
+  border-color: rgba(239, 107, 98, 0.85);
+  box-shadow: 0 0 0 3px rgba(239, 107, 98, 0.07);
+}
+
+.today-todo-item strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 580;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-todo-item time {
+  flex: 0 0 auto;
+  color: rgba(245, 245, 247, 0.35);
+  font-size: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.today-todo-empty,
+.today-todo-more {
+  color: rgba(245, 245, 247, 0.35);
+  font-size: 9px;
+  text-decoration: none;
+}
+
+.today-todo-more {
+  flex: 0 0 auto;
+  padding: 5px;
+}
+
+.quick-todo-form {
+  display: grid;
+  height: 32px;
+  grid-template-columns: minmax(0, 1fr) 30px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.quick-todo-form:focus-within {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.quick-todo-form input {
+  min-width: 0;
+  padding: 0 9px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 10px;
+}
+
+.quick-todo-form input::placeholder {
+  color: rgba(245, 245, 247, 0.3);
+}
+
+.quick-todo-form button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  color: rgba(245, 245, 247, 0.5);
+  cursor: pointer;
+}
+
+.quick-todo-form button:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+}
+
+.quick-todo-form button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.today-todo-strip + main {
+  padding-top: 18px;
+}
+
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 344px));

@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from state_store import BusinessStateStore, StateConflict, DEFAULTS, CARDS, SESSION, HISTORY, CLIPBOARD
+from state_store import BusinessStateStore, StateConflict, DEFAULTS, CARDS, SESSION, HISTORY, CLIPBOARD, TODOS
 
 
 class BusinessStateTests(unittest.TestCase):
@@ -23,6 +23,14 @@ class BusinessStateTests(unittest.TestCase):
         result = reopened.initialize({CARDS: []}, "another-browser")
         self.assertFalse(result["imported"])
         self.assertEqual(len(result["data"][CARDS]), 1)
+
+    def test_existing_database_receives_new_todo_document(self):
+        reopened = BusinessStateStore(self.store.directory)
+        base = reopened.snapshot()["data"][TODOS]
+        value = {"version": 1, "updatedAt": 10, "items": [{"id": "todo-1", "title": "测试"}]}
+        reopened.update({TODOS: {"base": base, "value": value}})
+        persisted = BusinessStateStore(self.store.directory).snapshot()["data"][TODOS]
+        self.assertEqual(persisted["items"][0]["title"], "测试")
 
     def test_non_conflicting_edits_from_stale_clients_merge(self):
         base = self.store.snapshot()["data"][CARDS]
