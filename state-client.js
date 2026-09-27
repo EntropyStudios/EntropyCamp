@@ -1,6 +1,13 @@
 (function exposeSharedState() {
   "use strict";
-  const keys = ["lumen-reminder-cards-v1", "lumen-reminder-work-session-v1", "lumen-reminder-work-history-v1", "lumen-multi-clipboard-v1"];
+  const keys = ["lumen-reminder-cards-v1", "lumen-reminder-work-session-v1", "lumen-reminder-work-history-v1", "lumen-multi-clipboard-v1", "lumen-todos-v1"];
+  const defaults = {
+    "lumen-reminder-cards-v1": [],
+    "lumen-reminder-work-session-v1": { active: false, startedAt: null, endedAt: null, countsByCardId: {}, countedTurnIdsByCardId: {} },
+    "lumen-reminder-work-history-v1": { version: 2, updatedAt: 0, entries: [] },
+    "lumen-multi-clipboard-v1": { version: 1, updatedAt: 0, items: [] },
+    "lumen-todos-v1": { version: 1, updatedAt: 0, items: [] },
+  };
   const listeners = new Set();
   let data = {};
   let revision = -1;
@@ -40,8 +47,9 @@
     const updated = new Set(changed);
     keys.forEach((key) => {
       if ((lastWrite.get(key) || 0) > writeId) return;
-      if (!equal(data[key], snapshot.data[key])) updated.add(key);
-      data[key] = clone(snapshot.data[key]);
+      const value = snapshot.data[key] === undefined ? defaults[key] : snapshot.data[key];
+      if (!equal(data[key], value)) updated.add(key);
+      data[key] = clone(value);
     });
     revision = snapshot.revision;
     publish([...updated]);
@@ -71,7 +79,7 @@
         const raw = localStorage.getItem(key);
         if (raw !== null) legacy[key] = JSON.parse(raw);
       });
-      for (const [key, core] of [[keys[2], window.WorkHistoryCore], [keys[3], window.ClipboardCore]]) {
+      for (const [key, core] of [[keys[2], window.WorkHistoryCore], [keys[3], window.ClipboardCore], [keys[4], window.TodoCore]]) {
         if (!(key in legacy)) continue;
         const normalized = core.normalizeStore(legacy[key]);
         if (normalized.invalid || normalized.incompatible) throw new Error("旧数据需要检查，已停止自动迁移");

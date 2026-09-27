@@ -12,7 +12,8 @@ const key='lumen-reminder-cards-v1';
 let state={initialized:true,revision:1,data:{[key]:[{id:'a',title:'original'}],
  'lumen-reminder-work-session-v1':{active:false},
  'lumen-reminder-work-history-v1':{version:2,entries:[]},
- 'lumen-multi-clipboard-v1':{version:1,items:[]}}};
+ 'lumen-multi-clipboard-v1':{version:1,items:[]},
+ 'lumen-todos-v1':{version:1,items:[]}}};
 const clone=x=>JSON.parse(JSON.stringify(x));
 let failNext=false,posts=0;
 async function fetch(path,options){

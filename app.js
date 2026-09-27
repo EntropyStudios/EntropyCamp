@@ -4,6 +4,7 @@ const businessState = window.EntropyState;
 const STORAGE_KEY = "lumen-reminder-cards-v1";
 const WORK_SESSION_KEY = "lumen-reminder-work-session-v1";
 const WORK_HISTORY_KEY = "lumen-reminder-work-history-v1";
+const TODOS_KEY = "lumen-todos-v1";
 const DAILY_QUOTE_KEY = "lumen-reminder-hourly-quote-v1";
 const WEATHER_CACHE_KEY = "lumen-reminder-weather-v1";
 const HEADER_CLOCK_KEY = "lumen-reminder-header-clock-v1";
@@ -17,12 +18,14 @@ const cardOrderCore = window.CardOrderCore;
 const workHistoryCore = window.WorkHistoryCore;
 const planetVisualCore = window.PlanetVisualCore;
 const solarCycleCore = window.SolarCycleCore;
+const todoCore = window.TodoCore;
 const WORK_HISTORY_STORE_VERSION = workHistoryCore?.STORE_VERSION || 1;
 
 let cards = loadCards();
 let planetAssignmentsNeedSave = planetVisualCore.ensureAssignments(cards);
 let workSession = loadWorkSession();
 let workHistoryStore = loadWorkHistory();
+let todoStore = loadTodoStore();
 let codexThreads = [];
 let codexAvailable = false;
 let codexSyncing = false;
@@ -250,6 +253,10 @@ let conversationGraphRenderFrame = 0;
 let conversationGraphDisposed = false;
 
 const grid = document.querySelector("#cardGrid");
+const todayTodoSummary = document.querySelector("#todayTodoSummary");
+const todayTodoItems = document.querySelector("#todayTodoItems");
+const quickTodoForm = document.querySelector("#quickTodoForm");
+const quickTodoTitle = document.querySelector("#quickTodoTitle");
 const dialog = document.querySelector("#cardDialog");
 const form = document.querySelector("#cardForm");
 const workSummary = document.querySelector("#workSummary");
@@ -487,6 +494,87 @@ function loadWorkHistory(rawValue) {
       unavailable: true,
     };
   }
+}
+
+function loadTodoStore(rawValue) {
+  try {
+    const raw = rawValue === undefined ? businessState.getItem(TODOS_KEY) : rawValue;
+    return todoCore.normalizeStore(raw);
+  } catch {
+    return { version: todoCore.STORE_VERSION, updatedAt: 0, items: [], invalid: true };
+  }
+}
+
+async function persistTodos(nextItems, base = businessState.getItem(TODOS_KEY)) {
+  if (todoStore.incompatible) return false;
+  const payload = { version: todoCore.STORE_VERSION, updatedAt: Date.now(), items: nextItems };
+  if (!await businessState.setItem(TODOS_KEY, JSON.stringify(payload), base)) return false;
+  todoStore = loadTodoStore();
+  return true;
+}
+
+function homeTodoDueLabel(timestamp) {
+  if (!Number.isFinite(timestamp)) return "";
+  const date = new Date(timestamp);
+  const time = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: DISPLAY_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+  return timestamp < Date.now() ? `逾期 ${time}` : time;
+}
+
+function renderTodayTodoStrip() {
+  if (!todayTodoSummary || !todayTodoItems) return;
+  const summary = todoCore.todaySummary(todoStore.items);
+  const visible = todoCore.sortItems(todoStore.items, "today").slice(0, 4);
+  todayTodoSummary.textContent = `${summary.completed}/${summary.total}`;
+  todayTodoItems.innerHTML = visible.length
+    ? visible.map((item) => `
+      <button class="today-todo-item${item.priority === "high" ? " is-high" : ""}" type="button" data-home-todo="${escapeHtml(item.id)}" aria-label="完成 ${escapeHtml(item.title)}">
+        <span class="today-todo-check" aria-hidden="true"></span>
+        <strong>${escapeHtml(item.title)}</strong>
+        ${item.dueAt ? `<time datetime="${new Date(item.dueAt).toISOString()}">${escapeHtml(homeTodoDueLabel(item.dueAt))}</time>` : ""}
+      </button>`).join("")
+    : `<a class="today-todo-empty" href="todo.html?view=today">${summary.total ? "今天的待办已经完成" : "今天还没有待办"}</a>`;
+  const remaining = summary.remaining - visible.length;
+  if (remaining > 0) {
+    todayTodoItems.insertAdjacentHTML("beforeend", `<a class="today-todo-more" href="todo.html?view=today">+${remaining}</a>`);
+  }
+}
+
+async function addQuickTodo(event) {
+  event.preventDefault();
+  const title = quickTodoTitle.value.trim();
+  if (!title) return;
+  const now = Date.now();
+  const item = {
+    id: crypto.randomUUID?.() || `todo-${now}-${Math.random().toString(16).slice(2)}`,
+    title,
+    note: "",
+    section: "today",
+    priority: "normal",
+    dueAt: null,
+    completedAt: null,
+    order: todoCore.nextOrder(todoStore.items, "today"),
+    createdAt: now,
+    updatedAt: now,
+  };
+  const base = businessState.getItem(TODOS_KEY);
+  if (!await persistTodos([...todoStore.items, item], base)) return;
+  quickTodoTitle.value = "";
+  renderTodayTodoStrip();
+}
+
+async function completeHomeTodo(id) {
+  const now = Date.now();
+  const base = businessState.getItem(TODOS_KEY);
+  const next = todoStore.items.map((item) => item.id === id
+    ? { ...item, completedAt: now, updatedAt: now }
+    : item);
+  if (!await persistTodos(next, base)) return;
+  renderTodayTodoStrip();
 }
 
 async function persistWorkHistoryEntry(entry, finalSession, finalCards) {
@@ -5040,6 +5128,11 @@ document.querySelector("#cancelDialogButton").addEventListener("click", closeDia
 document.querySelector("#deleteCardButton").addEventListener("click", deleteCard);
 document.querySelector("#codexThread").addEventListener("change", updateReminderMode);
 form.addEventListener("submit", saveCard);
+quickTodoForm?.addEventListener("submit", addQuickTodo);
+todayTodoItems?.addEventListener("click", (event) => {
+  const item = event.target.closest("[data-home-todo]");
+  if (item) completeHomeTodo(item.dataset.homeTodo);
+});
 
 dialog.addEventListener("click", (event) => {
   if (event.target === dialog) closeDialog();
@@ -5098,6 +5191,10 @@ window.addEventListener("storage", (event) => {
 });
 
 businessState.subscribe(async ({ keys }) => {
+  if (keys.includes(TODOS_KEY)) {
+    todoStore = loadTodoStore();
+    renderTodayTodoStrip();
+  }
   if (!keys.includes(STORAGE_KEY) && !keys.includes(WORK_SESSION_KEY) && !keys.includes(WORK_HISTORY_KEY)) return;
   let assignmentsChanged = false;
   if (keys.includes(STORAGE_KEY)) {
@@ -5173,6 +5270,7 @@ if (planetAssignmentsNeedSave) {
 ensureDailyHeaderClock(true);
 revealHeaderClockAfterHydration();
 startCorpusClockAnimation();
+renderTodayTodoStrip();
 render({ animate: false });
 if (new URLSearchParams(window.location.search).get("reflectionPreview") === "1") {
   openWorkReflectionDialog({ preview: true });

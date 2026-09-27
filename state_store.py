@@ -15,11 +15,13 @@ CARDS = "lumen-reminder-cards-v1"
 SESSION = "lumen-reminder-work-session-v1"
 HISTORY = "lumen-reminder-work-history-v1"
 CLIPBOARD = "lumen-multi-clipboard-v1"
+TODOS = "lumen-todos-v1"
 DEFAULTS = {
     CARDS: [],
     SESSION: {"active": False, "startedAt": None, "endedAt": None, "countsByCardId": {}, "countedTurnIdsByCardId": {}},
     HISTORY: {"version": 2, "updatedAt": 0, "entries": []},
     CLIPBOARD: {"version": 1, "updatedAt": 0, "items": []},
+    TODOS: {"version": 1, "updatedAt": 0, "items": []},
 }
 MISSING = object()
 
@@ -61,7 +63,7 @@ def _validate(key: str, value: Any) -> None:
     json.dumps(value, ensure_ascii=False, allow_nan=False)
     if key == CARDS:
         rows = value
-    elif key in {HISTORY, CLIPBOARD}:
+    elif key in {HISTORY, CLIPBOARD, TODOS}:
         expected = 2 if key == HISTORY else 1
         if not isinstance(value, dict) or value.get("version") != expected:
             raise ValueError("不支持的数据版本")
@@ -92,6 +94,11 @@ class BusinessStateStore:
             connection.execute("CREATE TABLE IF NOT EXISTS documents (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
             connection.execute("CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
             connection.execute("INSERT OR IGNORE INTO metadata VALUES ('revision', '0')")
+            for key, value in DEFAULTS.items():
+                connection.execute(
+                    "INSERT OR IGNORE INTO documents VALUES (?, ?)",
+                    (key, json.dumps(value, ensure_ascii=False)),
+                )
         self._protect()
 
     def _protect(self):
@@ -164,7 +171,7 @@ class BusinessStateStore:
                     raise StateConflict("班次已改变，请重新读取")
                 merged = _merge(base, incoming, current, key)
                 _validate(key, merged)
-                connection.execute("UPDATE documents SET value=? WHERE key=?", (json.dumps(merged, ensure_ascii=False), key))
+                connection.execute("INSERT OR REPLACE INTO documents VALUES (?, ?)", (key, json.dumps(merged, ensure_ascii=False)))
             connection.execute("UPDATE metadata SET value=CAST(value AS INTEGER)+1 WHERE key='revision'")
             result = self._snapshot(connection)
         self._protect()
