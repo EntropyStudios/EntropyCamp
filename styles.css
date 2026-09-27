@@ -76,6 +76,7 @@ body.has-due-reminders .page {
 
 .topbar {
   display: flex;
+  position: relative;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -3605,13 +3606,17 @@ main {
 
 .today-todo-strip {
   display: grid;
-  min-height: 52px;
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 1px);
+  right: 0;
+  left: 0;
+  height: 32px;
   grid-template-columns: auto minmax(0, 1fr) minmax(170px, 220px);
   gap: 12px;
   align-items: center;
-  margin-top: 14px;
-  padding: 8px 0 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.085);
+  padding: 0;
+  background: #000;
 }
 
 .today-todo-heading {
@@ -3766,9 +3771,6 @@ main {
   height: 14px;
 }
 
-.today-todo-strip + main {
-  padding-top: 18px;
-}
 
 .card-grid {
   display: grid;

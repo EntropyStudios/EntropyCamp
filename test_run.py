@@ -1906,6 +1906,8 @@ class TodoPageTests(unittest.TestCase):
         for element_id in ("todayTodoStrip", "todayTodoItems", "quickTodoForm", "quickTodoTitle"):
             self.assertIn(f'id="{element_id}"', index)
         self.assertIn('href="todo.html?view=today"', index)
+        topbar_end = index.index("</header>", index.index('class="topbar"'))
+        self.assertLess(index.index('id="todayTodoStrip"'), topbar_end)
         self.assertLess(index.index('src="todo-core.js"'), index.index('src="state-client.js"'))
         self.assertIn('const TODOS_KEY = "lumen-todos-v1"', app)
         self.assertIn("renderTodayTodoStrip()", app)
@@ -1921,6 +1923,9 @@ class TodoPageTests(unittest.TestCase):
         self.assertIn("core.moveItem", script)
         self.assertIn("row.animate(", script)
         self.assertRegex(css, r"\.todo-row\s*\{[^}]*display:\s*grid")
+        home_css = (root / "styles.css").read_text(encoding="utf-8")
+        self.assertRegex(home_css, r"\.today-todo-strip\s*\{[^}]*position:\s*absolute")
+        self.assertNotIn(".today-todo-strip + main", home_css)
         self.assertIn("@media (prefers-reduced-motion: reduce)", css)
         self.assertNotIn("innerHTML", script)
 
