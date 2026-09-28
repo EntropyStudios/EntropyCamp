@@ -107,6 +107,9 @@ const BIG_BEN_ROMAN_NUMERALS = [
   "XII", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI",
 ];
 const BIG_BEN_HAND_TICK_MS = 2000;
+const HEADER_CLOCK_MAX_FPS = 60;
+const HEADER_CLOCK_FRAME_INTERVAL_MS = 1000 / HEADER_CLOCK_MAX_FPS;
+const HEADER_CLOCK_WAKE_AHEAD_MS = 4;
 const CORPUS_CLOCK_NS = "http://www.w3.org/2000/svg";
 const PRAGUE_ORLOJ_CENTER = { x: 512, y: 612 };
 const PRAGUE_ORLOJ_LATITUDE = 50.087;
@@ -210,6 +213,8 @@ const CORPUS_CLOCK_RING_SPECS = {
 };
 
 let corpusClockAnimationFrame = null;
+let corpusClockAnimationTimer = null;
+let corpusClockLastFrameAt = null;
 let activeHeaderClockId = null;
 let headerClockDayKey = null;
 let bigBenLastBeat = null;
@@ -3561,23 +3566,46 @@ const HEADER_CLOCK_RUNTIMES = {
   },
 };
 
+function scheduleCorpusClockFrame(now = null) {
+  if (corpusClockAnimationFrame !== null || corpusClockAnimationTimer !== null) return;
+  const wait = now === null || corpusClockLastFrameAt === null
+    ? 0
+    : Math.max(0, HEADER_CLOCK_FRAME_INTERVAL_MS - (now - corpusClockLastFrameAt) - HEADER_CLOCK_WAKE_AHEAD_MS);
+  if (wait <= 0) {
+    corpusClockAnimationFrame = requestAnimationFrame(runCorpusClockFrame);
+    return;
+  }
+  corpusClockAnimationTimer = setTimeout(() => {
+    corpusClockAnimationTimer = null;
+    if (document.visibilityState !== "hidden" && corpusClockAnimationFrame === null) {
+      corpusClockAnimationFrame = requestAnimationFrame(runCorpusClockFrame);
+    }
+  }, wait);
+}
+
 function runCorpusClockFrame(now) {
-  HEADER_CLOCK_RUNTIMES[activeHeaderClockId]?.frame({
-    now,
-    date: corpusClockRenderDate(),
-  });
-  corpusClockAnimationFrame = requestAnimationFrame(runCorpusClockFrame);
+  corpusClockAnimationFrame = null;
+  if (corpusClockLastFrameAt === null || now - corpusClockLastFrameAt >= HEADER_CLOCK_FRAME_INTERVAL_MS - 0.5) {
+    corpusClockLastFrameAt = now;
+    HEADER_CLOCK_RUNTIMES[activeHeaderClockId]?.frame({
+      now,
+      date: corpusClockRenderDate(),
+    });
+  }
+  scheduleCorpusClockFrame(now);
 }
 
 function startCorpusClockAnimation() {
-  if (!corpusClock || corpusClockAnimationFrame !== null || document.visibilityState === "hidden") return;
-  corpusClockAnimationFrame = requestAnimationFrame(runCorpusClockFrame);
+  if (!corpusClock || corpusClockAnimationFrame !== null || corpusClockAnimationTimer !== null || document.visibilityState === "hidden") return;
+  scheduleCorpusClockFrame();
 }
 
 function stopCorpusClockAnimation() {
-  if (corpusClockAnimationFrame === null) return;
   cancelAnimationFrame(corpusClockAnimationFrame);
+  clearTimeout(corpusClockAnimationTimer);
   corpusClockAnimationFrame = null;
+  corpusClockAnimationTimer = null;
+  corpusClockLastFrameAt = null;
 }
 
 function feishuTimeLabel(timestamp = Date.now()) {

@@ -89,9 +89,11 @@ class Element {
 }
 globalThis.document={createElement:tag=>new Element(tag),hidden:false};
 globalThis.window={devicePixelRatio:1.3};
-const frames=new Map();let nextFrame=0;
+const frames=new Map(),timers=new Map();let nextFrame=0,nextTimer=0,clock=0;
 globalThis.requestAnimationFrame=fn=>{const id=++nextFrame;frames.set(id,fn);return id;};
 globalThis.cancelAnimationFrame=id=>frames.delete(id);
+globalThis.setTimeout=(fn,delay=0)=>{const id=++nextTimer;timers.set(id,{fn,due:clock+delay});return id;};
+globalThis.clearTimeout=id=>timers.delete(id);
 globalThis.ResizeObserver=class {
  observe(){if(failObserve)throw new Error('observe failed');if(!this.observed){this.observed=true;observers++;}}
  disconnect(){if(this.observed){this.observed=false;observers--;}}
@@ -105,7 +107,12 @@ class TrackballControls {
  dispose(){}
 }
 globalThis.__TrackballControls=TrackballControls;
-function step(now){const callbacks=[...frames.values()];frames.clear();callbacks.forEach(fn=>fn(now));}
+function step(now){
+ clock=now;
+ const due=[...timers.entries()].filter(([,timer])=>timer.due<=now);
+ due.forEach(([id])=>timers.delete(id));due.forEach(([,timer])=>timer.fn());
+ const callbacks=[...frames.values()];frames.clear();callbacks.forEach(fn=>fn(now));
+}
 class Renderer {
  constructor({canvas}){rendererCount++;this.canvas=canvas;this.ratio=1;this.geometries=new Set();this.textures=new Set();
   this.info={memory:{geometries:0,textures:0},programs:[]};this.context={lost:false,isContextLost(){return this.lost;}};}
@@ -187,6 +194,38 @@ assert.equal(disposeCount,1);assert.equal(lossCount,1);assert.equal(observers,0)
 assert.equal(renderTargetCount,1);assert.equal(renderTargetDisposeCount,1);
 assert.equal(canvas.handlers.size,0);assert.equal(canvas.width,1);assert.equal(canvas.height,1);
 assert.equal(container.children.length,1);
+assert.equal(timers.size,0);
+""")
+
+    def test_animation_loop_caps_240hz_display_at_60fps(self):
+        self.run_graph(r"""
+const canvas=new Element('canvas'),container=new Element();container.append(canvas);
+const graph=createConversationGraph({canvas,container,nodes:original});
+for(let tick=0;tick<=240;tick++)step(tick*(1000/240));
+const diagnostics=graph.getDiagnostics();
+assert.equal(container.dataset.graphFrameRateLimit,'60');
+assert.equal(container.dataset.graphNodePositions,undefined,'production loop serialized node positions');
+assert.equal(container.dataset.graphNodeStates,undefined,'production loop serialized node states');
+assert.ok(diagnostics.frameCount>=58,`rendered only ${diagnostics.frameCount} frames`);
+assert.ok(diagnostics.frameCount<=62,`rendered ${diagnostics.frameCount} frames on a 240Hz display`);
+assert.ok(diagnostics.wallElapsed>.94&&diagnostics.wallElapsed<1.02,`animation time drifted to ${diagnostics.wallElapsed}`);
+graph.dispose();
+""")
+
+    def test_label_measurements_are_cached_until_text_changes(self):
+        self.run_graph(r"""
+const canvas=new Element('canvas'),container=new Element();container.append(canvas);
+const graph=createConversationGraph({canvas,container,nodes:original});
+graph.renderOnce(.02);
+const first=graph.getDiagnostics().labelMeasurements;
+for(let index=0;index<120;index++)graph.renderOnce(.02);
+const stable=graph.getDiagnostics().labelMeasurements;
+assert.equal(stable,first,'unchanged labels were measured every frame');
+graph.update({nodes:original.map(node=>node.id==='t0'?{...node,label:'Longer updated task title'}:node)});
+graph.renderOnce(.02);
+const changed=graph.getDiagnostics().labelMeasurements;
+assert.ok(changed>stable,'changed label did not invalidate its cached measurement');
+graph.dispose();
 """)
 
     def test_active_phase_is_shown_on_sun_not_working_planet(self):

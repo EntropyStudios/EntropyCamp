@@ -2,6 +2,9 @@ import * as THREE from "./assets/vendor/three.module.js";
 import { TrackballControls } from "./assets/vendor/addons/controls/TrackballControls.js";
 
 let rendererGeneration = 0;
+const MAX_RENDER_FPS = 60;
+const MIN_RENDER_INTERVAL_MS = 1000 / MAX_RENDER_FPS;
+const RENDER_WAKE_AHEAD_MS = 4;
 
 const PLANET_SPECS = Object.freeze({
   "ash-twin": { radius: 0.2, axis: 5.0, color: 0xc9a46b, spinPeriod: 68, axialTilt: 8 },
@@ -678,10 +681,12 @@ function createLabel(layer, node, edge = false) {
 }
 
 function setLabelText(element, title, subtitle) {
-  if (!element) return;
+  if (!element) return false;
+  let changed = false;
   const strong = element.querySelector("strong"), span = element.querySelector("span");
-  if (strong && strong.textContent !== title) strong.textContent = title;
-  if (span && span.textContent !== subtitle) span.textContent = subtitle;
+  if (strong && strong.textContent !== title) { strong.textContent = title; changed = true; }
+  if (span && span.textContent !== subtitle) { span.textContent = subtitle; changed = true; }
+  return changed;
 }
 
 function quadraticPoint(start, control, end, progress, target = new THREE.Vector3()) {
@@ -736,15 +741,19 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
   lensing.material.uniforms.tScene.value = mainTarget.texture;
   const nodeGroups = [], edges = [], pickables = [], bindings = [];
   let sunGroup = null, whiteHoleGroup = null, prominenceSystem = null, solarEffects = null, labelLayer = null, resizeObserver = null;
-  let disposed = false, active = true, frame = 0, frameCount = 0, width = 0, height = 0;
+  let disposed = false, active = true, frame = 0, frameTimer = 0, frameCount = 0, width = 0, height = 0;
   let fitDistance = 18, zoom = 1, cameraFitted = false, extentX = 5, extentY = 4, selectedId = null, hoveredId = null;
-  let dragging = false, dragged = false, lastX = 0, lastY = 0, orbitElapsed = 0, wallElapsed = 0, previousTime = 0;
-  let signature = null, updateCount = 0, globalExplode = 0;
+  let dragging = false, dragged = false, lastX = 0, lastY = 0, orbitElapsed = 0, wallElapsed = 0;
+  let previousRenderTime = null, lastRenderedAt = null;
+  let signature = null, updateCount = 0, globalExplode = 0, labelMeasurements = 0;
+  let labelSizeCache = new WeakMap();
   let currentSolarState = normalizeSolarState(solarState), solarToken = currentSolarState.token, solarInitialized = false, solarLifecycle = null;
   const projected = new THREE.Vector3(), pointer = new THREE.Vector2(), raycaster = new THREE.Raycaster();
   const lensWorld = new THREE.Vector3(), lensView = new THREE.Vector3(), lensScreen = new THREE.Vector3();
   const generation = ++rendererGeneration;
   container.dataset.graphRendererGeneration = String(generation); container.dataset.graphUpdateCount = "0";
+  container.dataset.graphFrameRateLimit = String(MAX_RENDER_FPS);
+  container.dataset.graphControls = "free-trackball"; container.dataset.graphLensing = "screen-space";
 
   function attachAsset(visual, key, uniforms, special = "") {
     const version = (visual.userData.assetVersion || 0) + 1; visual.userData.assetVersion = version;
@@ -902,8 +911,8 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
     }
     group.userData.targetScale = group.userData.displayRadius * planetScale(node);
     group.userData.targetBrightness = node.shattered ? 0.9 : node.working ? 1 : 0.55;
-    setLabelText(group.userData.label, node.label, node.working ? "" : node.statusLabel);
-    setLabelText(group.userData.edge.label, edgeLabel(node));
+    if (setLabelText(group.userData.label, node.label, node.working ? "" : node.statusLabel)) labelSizeCache.delete(group.userData.label);
+    if (setLabelText(group.userData.edge.label, edgeLabel(node))) labelSizeCache.delete(group.userData.edge.label);
     return planetChanged;
   }
 
@@ -985,9 +994,6 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
     prominenceSystem?.update(delta, evolution, visible && collapse < 0.15 && blast < 0.01);
     if (prominenceSystem) prominenceSystem.group.scale.setScalar(scale / SUN_RADIUS);
     solarEffects?.update(blast);
-    container.dataset.graphSolarMode = solarLifecycle?.type || currentSolarState.mode;
-    container.dataset.graphSolarProgress = dayProgress.toFixed(4);
-    container.dataset.graphGlobalExplode = globalExplode.toFixed(4);
   }
 
   function update({ nodes: nextNodes, solarState: nextSolarState = currentSolarState, reducedMotion: nextMotion = reducedMotion }) {
@@ -1014,7 +1020,8 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
     const rect = container.getBoundingClientRect(), nextWidth = Math.max(1, Math.floor(rect.width)), nextHeight = Math.max(1, Math.floor(rect.height));
     const ratio = Math.min(window.devicePixelRatio || 1, 1.45);
     if (width !== nextWidth || height !== nextHeight || renderer.getPixelRatio() !== ratio) {
-      width = nextWidth; height = nextHeight; if (renderer.getPixelRatio() !== ratio) renderer.setPixelRatio(ratio); renderer.setSize(width, height, false);
+      width = nextWidth; height = nextHeight; labelSizeCache = new WeakMap();
+      if (renderer.getPixelRatio() !== ratio) renderer.setPixelRatio(ratio); renderer.setSize(width, height, false);
       mainTarget.setSize(Math.max(1, Math.floor(width * ratio)), Math.max(1, Math.floor(height * ratio)));
       lensing.material.uniforms.uResolution.value.set(width, height);
     }
@@ -1116,7 +1123,12 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
     });
     function positionLabel(element, point, important = false) {
       if (!element) return;
-      const w = element.offsetWidth || 90, h = element.offsetHeight || 28;
+      let size = labelSizeCache.get(element);
+      if (!size) {
+        size = { width: element.offsetWidth || 90, height: element.offsetHeight || 28 };
+        labelSizeCache.set(element, size); labelMeasurements += 1;
+      }
+      const w = size.width, h = size.height;
       let chosen = null;
       for (const offset of [-14, 18, -42, 44]) {
         const x = THREE.MathUtils.clamp(point.x - w / 2, 5, Math.max(5, width - w - 5));
@@ -1159,7 +1171,8 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
     attribute.needsUpdate = true;
     edge.line.material.opacity = 0.14 + (0.5 + 0.5 * Math.sin(wallElapsed * 1.7 + edge.phase)) * 0.28;
     edge.particles.forEach((particle) => { particle.material.color.setHex(color); particle.position.copy(edge.curve.getPoint((wallElapsed * 0.18 + particle.userData.offset) % 1)); });
-    setLabelText(edge.label, edgeLabel(node)); edge.label.style.setProperty("--effort-color", `#${new THREE.Color(color).getHexString()}`);
+    if (setLabelText(edge.label, edgeLabel(node))) labelSizeCache.delete(edge.label);
+    edge.label.style.setProperty("--effort-color", `#${new THREE.Color(color).getHexString()}`);
   }
 
   function updateTask(group, delta) {
@@ -1224,7 +1237,7 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
         : currentSolarState.mode === "destroyed" ? "等待下一次上班"
           : sunActivityLabel(nodeGroups);
     sunGroup.userData.node.statusLabel = status;
-    setLabelText(sunGroup.userData.label, sunGroup.userData.node.label, status);
+    if (setLabelText(sunGroup.userData.label, sunGroup.userData.node.label, status)) labelSizeCache.delete(sunGroup.userData.label);
     container.dataset.graphSunStatus = status;
   }
 
@@ -1262,49 +1275,44 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
     }));
     updateLensingAnchors(); renderer.setRenderTarget(mainTarget); renderer.render(scene, camera);
     renderer.setRenderTarget(null); renderer.render(lensing.scene, lensing.camera); placeLabels();
-    container.dataset.graphReady = "true";
-    container.dataset.graphControls = "free-trackball"; container.dataset.graphLensing = "screen-space";
-    container.dataset.graphNodePositions = JSON.stringify(nodeGroups.map((group) => ({
-      id: group.userData.node.id,
-      ...project(group.position),
-    })));
-    container.dataset.graphNodeStates = JSON.stringify(nodeGroups.map((group) => ({
-      id: group.userData.node.id,
-      planetKey: group.userData.node.planetKey,
-      working: group.userData.node.working,
-      shattered: group.userData.node.shattered,
-      radius: group.userData.radius,
-      displayRadius: group.userData.displayRadius,
-      scale: group.userData.currentScale,
-      brightness: group.userData.currentBrightness,
-      explode: group.userData.uniforms.explode.value,
-      interiorShards: group.userData.visual.userData.interiorShardLayer?.userData.count || 0,
-      interiorCoreShards: group.userData.visual.userData.interiorShardLayer?.userData.coreCount || 0,
-      fragmentStyle: group.userData.visual.userData.interiorShardLayer?.userData.style || "",
-      spinAngle: group.userData.spinAngle,
-      spinSpeed: group.userData.spinSpec.speed,
-      spinTilt: [group.userData.spinSpec.tiltX, group.userData.spinSpec.tiltZ],
-      lifecycle: group.userData.lifecycle?.type || "",
-    })));
-    container.dataset.graphActiveLinks = String(edges.filter((edge) => edge.line.visible).length);
-    container.dataset.graphGeometryCount = String(renderer.info.memory.geometries);
-    container.dataset.graphTextureCount = String(renderer.info.memory.textures);
+    if (container.dataset.graphReady !== "true") container.dataset.graphReady = "true";
     frameCount += 1; return true;
+  }
+
+  function scheduleNextFrame(now = null) {
+    if (disposed || !active || frame || frameTimer) return;
+    const wait = now === null || lastRenderedAt === null
+      ? 0
+      : Math.max(0, MIN_RENDER_INTERVAL_MS - (now - lastRenderedAt) - RENDER_WAKE_AHEAD_MS);
+    if (wait <= 0) {
+      frame = requestAnimationFrame(animate);
+      return;
+    }
+    frameTimer = setTimeout(() => {
+      frameTimer = 0;
+      if (!disposed && active && !frame) frame = requestAnimationFrame(animate);
+    }, wait);
   }
 
   function animate(now) {
     frame = 0; if (disposed || !active) return;
-    const delta = Math.min(0.05, previousTime ? (now - previousTime) / 1000 : 0); previousTime = now;
-    renderOnce(delta); frame = requestAnimationFrame(animate);
+    const due = lastRenderedAt === null || now - lastRenderedAt >= MIN_RENDER_INTERVAL_MS - 0.5;
+    if (due) {
+      const delta = Math.min(0.05, previousRenderTime === null ? 0 : (now - previousRenderTime) / 1000);
+      previousRenderTime = now; lastRenderedAt = now; renderOnce(delta);
+    }
+    scheduleNextFrame(now);
   }
   function setActive(value) {
     if (disposed) return; active = Boolean(value);
-    if (!active) { cancelAnimationFrame(frame); frame = 0; previousTime = 0; }
-    else if (!frame) frame = requestAnimationFrame(animate);
+    if (!active) {
+      cancelAnimationFrame(frame); clearTimeout(frameTimer); frame = 0; frameTimer = 0;
+      previousRenderTime = null; lastRenderedAt = null;
+    } else scheduleNextFrame();
   }
 
   function dispose() {
-    if (disposed) return; disposed = true; active = false; cancelAnimationFrame(frame); resizeObserver?.disconnect();
+    if (disposed) return; disposed = true; active = false; cancelAnimationFrame(frame); clearTimeout(frameTimer); frameTimer = 0; resizeObserver?.disconnect();
     bindings.forEach(([type, listener, options]) => canvas.removeEventListener(type, listener, options)); labelLayer?.remove();
     controls.dispose(); disposeGraphLayer();
     scene.traverse((object) => {
@@ -1341,7 +1349,7 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
       },
       clearSelection() { selectedId = null; container.dataset.selectedNode = ""; onNodeSelect?.(null); },
       getDiagnostics() {
-        return { nodes: nodes.length, selectedId, orbitElapsed, wallElapsed, active, disposed, frameCount, sunRadius: SUN_RADIUS,
+        return { nodes: nodes.length, selectedId, orbitElapsed, wallElapsed, active, disposed, frameCount, labelMeasurements, sunRadius: SUN_RADIUS,
           solarMode: solarLifecycle?.type || currentSolarState.mode, solarProgress: currentDayProgress(), globalExplode,
           sunScale: sunGroup?.userData.currentScale || 0,
           rotation: camera.rotation.toArray(), camera: camera.position.toArray(), target: controls.target.toArray(), zoom,
@@ -1359,6 +1367,9 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
             interiorShards: group.userData.visual.userData.interiorShardLayer?.userData.count || 0,
             interiorCoreShards: group.userData.visual.userData.interiorShardLayer?.userData.coreCount || 0,
             fragmentStyle: group.userData.visual.userData.interiorShardLayer?.userData.style || "",
+            spinAngle: group.userData.spinAngle,
+            spinSpeed: group.userData.spinSpec.speed,
+            spinTilt: [group.userData.spinSpec.tiltX, group.userData.spinSpec.tiltZ],
             lifecycle: group.userData.lifecycle?.type || "",
           })),
           geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures,
