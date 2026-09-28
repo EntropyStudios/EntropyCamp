@@ -189,6 +189,19 @@ assert.equal(canvas.handlers.size,0);assert.equal(canvas.width,1);assert.equal(c
 assert.equal(container.children.length,1);
 """)
 
+    def test_animation_loop_caps_240hz_display_at_60fps(self):
+        self.run_graph(r"""
+const canvas=new Element('canvas'),container=new Element();container.append(canvas);
+const graph=createConversationGraph({canvas,container,nodes:original});
+for(let tick=0;tick<=240;tick++)step(tick*(1000/240));
+const diagnostics=graph.getDiagnostics();
+assert.equal(container.dataset.graphFrameRateLimit,'60');
+assert.ok(diagnostics.frameCount>=58,`rendered only ${diagnostics.frameCount} frames`);
+assert.ok(diagnostics.frameCount<=62,`rendered ${diagnostics.frameCount} frames on a 240Hz display`);
+assert.ok(diagnostics.wallElapsed>.94&&diagnostics.wallElapsed<1.02,`animation time drifted to ${diagnostics.wallElapsed}`);
+graph.dispose();
+""")
+
     def test_active_phase_is_shown_on_sun_not_working_planet(self):
         self.run_graph(r"""
 const canvas=new Element('canvas'),container=new Element();container.append(canvas);

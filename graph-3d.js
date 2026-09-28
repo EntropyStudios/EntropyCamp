@@ -2,6 +2,8 @@ import * as THREE from "./assets/vendor/three.module.js";
 import { TrackballControls } from "./assets/vendor/addons/controls/TrackballControls.js";
 
 let rendererGeneration = 0;
+const MAX_RENDER_FPS = 60;
+const MIN_RENDER_INTERVAL_MS = 1000 / MAX_RENDER_FPS;
 
 const PLANET_SPECS = Object.freeze({
   "ash-twin": { radius: 0.2, axis: 5.0, color: 0xc9a46b, spinPeriod: 68, axialTilt: 8 },
@@ -738,13 +740,15 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
   let sunGroup = null, whiteHoleGroup = null, prominenceSystem = null, solarEffects = null, labelLayer = null, resizeObserver = null;
   let disposed = false, active = true, frame = 0, frameCount = 0, width = 0, height = 0;
   let fitDistance = 18, zoom = 1, cameraFitted = false, extentX = 5, extentY = 4, selectedId = null, hoveredId = null;
-  let dragging = false, dragged = false, lastX = 0, lastY = 0, orbitElapsed = 0, wallElapsed = 0, previousTime = 0;
+  let dragging = false, dragged = false, lastX = 0, lastY = 0, orbitElapsed = 0, wallElapsed = 0;
+  let previousRenderTime = null, lastRenderedAt = null;
   let signature = null, updateCount = 0, globalExplode = 0;
   let currentSolarState = normalizeSolarState(solarState), solarToken = currentSolarState.token, solarInitialized = false, solarLifecycle = null;
   const projected = new THREE.Vector3(), pointer = new THREE.Vector2(), raycaster = new THREE.Raycaster();
   const lensWorld = new THREE.Vector3(), lensView = new THREE.Vector3(), lensScreen = new THREE.Vector3();
   const generation = ++rendererGeneration;
   container.dataset.graphRendererGeneration = String(generation); container.dataset.graphUpdateCount = "0";
+  container.dataset.graphFrameRateLimit = String(MAX_RENDER_FPS);
 
   function attachAsset(visual, key, uniforms, special = "") {
     const version = (visual.userData.assetVersion || 0) + 1; visual.userData.assetVersion = version;
@@ -1294,12 +1298,16 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
 
   function animate(now) {
     frame = 0; if (disposed || !active) return;
-    const delta = Math.min(0.05, previousTime ? (now - previousTime) / 1000 : 0); previousTime = now;
-    renderOnce(delta); frame = requestAnimationFrame(animate);
+    const due = lastRenderedAt === null || now - lastRenderedAt >= MIN_RENDER_INTERVAL_MS - 0.5;
+    if (due) {
+      const delta = Math.min(0.05, previousRenderTime === null ? 0 : (now - previousRenderTime) / 1000);
+      previousRenderTime = now; lastRenderedAt = now; renderOnce(delta);
+    }
+    frame = requestAnimationFrame(animate);
   }
   function setActive(value) {
     if (disposed) return; active = Boolean(value);
-    if (!active) { cancelAnimationFrame(frame); frame = 0; previousTime = 0; }
+    if (!active) { cancelAnimationFrame(frame); frame = 0; previousRenderTime = null; lastRenderedAt = null; }
     else if (!frame) frame = requestAnimationFrame(animate);
   }
 
