@@ -4,6 +4,7 @@ import { TrackballControls } from "./assets/vendor/addons/controls/TrackballCont
 let rendererGeneration = 0;
 const MAX_RENDER_FPS = 60;
 const MIN_RENDER_INTERVAL_MS = 1000 / MAX_RENDER_FPS;
+const RENDER_WAKE_AHEAD_MS = 4;
 
 const PLANET_SPECS = Object.freeze({
   "ash-twin": { radius: 0.2, axis: 5.0, color: 0xc9a46b, spinPeriod: 68, axialTilt: 8 },
@@ -738,7 +739,7 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
   lensing.material.uniforms.tScene.value = mainTarget.texture;
   const nodeGroups = [], edges = [], pickables = [], bindings = [];
   let sunGroup = null, whiteHoleGroup = null, prominenceSystem = null, solarEffects = null, labelLayer = null, resizeObserver = null;
-  let disposed = false, active = true, frame = 0, frameCount = 0, width = 0, height = 0;
+  let disposed = false, active = true, frame = 0, frameTimer = 0, frameCount = 0, width = 0, height = 0;
   let fitDistance = 18, zoom = 1, cameraFitted = false, extentX = 5, extentY = 4, selectedId = null, hoveredId = null;
   let dragging = false, dragged = false, lastX = 0, lastY = 0, orbitElapsed = 0, wallElapsed = 0;
   let previousRenderTime = null, lastRenderedAt = null;
@@ -1296,6 +1297,21 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
     frameCount += 1; return true;
   }
 
+  function scheduleNextFrame(now = null) {
+    if (disposed || !active || frame || frameTimer) return;
+    const wait = now === null || lastRenderedAt === null
+      ? 0
+      : Math.max(0, MIN_RENDER_INTERVAL_MS - (now - lastRenderedAt) - RENDER_WAKE_AHEAD_MS);
+    if (wait <= 0) {
+      frame = requestAnimationFrame(animate);
+      return;
+    }
+    frameTimer = setTimeout(() => {
+      frameTimer = 0;
+      if (!disposed && active && !frame) frame = requestAnimationFrame(animate);
+    }, wait);
+  }
+
   function animate(now) {
     frame = 0; if (disposed || !active) return;
     const due = lastRenderedAt === null || now - lastRenderedAt >= MIN_RENDER_INTERVAL_MS - 0.5;
@@ -1303,16 +1319,18 @@ export function createConversationGraph({ container, canvas, nodes, solarState =
       const delta = Math.min(0.05, previousRenderTime === null ? 0 : (now - previousRenderTime) / 1000);
       previousRenderTime = now; lastRenderedAt = now; renderOnce(delta);
     }
-    frame = requestAnimationFrame(animate);
+    scheduleNextFrame(now);
   }
   function setActive(value) {
     if (disposed) return; active = Boolean(value);
-    if (!active) { cancelAnimationFrame(frame); frame = 0; previousRenderTime = null; lastRenderedAt = null; }
-    else if (!frame) frame = requestAnimationFrame(animate);
+    if (!active) {
+      cancelAnimationFrame(frame); clearTimeout(frameTimer); frame = 0; frameTimer = 0;
+      previousRenderTime = null; lastRenderedAt = null;
+    } else scheduleNextFrame();
   }
 
   function dispose() {
-    if (disposed) return; disposed = true; active = false; cancelAnimationFrame(frame); resizeObserver?.disconnect();
+    if (disposed) return; disposed = true; active = false; cancelAnimationFrame(frame); clearTimeout(frameTimer); frameTimer = 0; resizeObserver?.disconnect();
     bindings.forEach(([type, listener, options]) => canvas.removeEventListener(type, listener, options)); labelLayer?.remove();
     controls.dispose(); disposeGraphLayer();
     scene.traverse((object) => {

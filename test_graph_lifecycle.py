@@ -89,9 +89,11 @@ class Element {
 }
 globalThis.document={createElement:tag=>new Element(tag),hidden:false};
 globalThis.window={devicePixelRatio:1.3};
-const frames=new Map();let nextFrame=0;
+const frames=new Map(),timers=new Map();let nextFrame=0,nextTimer=0,clock=0;
 globalThis.requestAnimationFrame=fn=>{const id=++nextFrame;frames.set(id,fn);return id;};
 globalThis.cancelAnimationFrame=id=>frames.delete(id);
+globalThis.setTimeout=(fn,delay=0)=>{const id=++nextTimer;timers.set(id,{fn,due:clock+delay});return id;};
+globalThis.clearTimeout=id=>timers.delete(id);
 globalThis.ResizeObserver=class {
  observe(){if(failObserve)throw new Error('observe failed');if(!this.observed){this.observed=true;observers++;}}
  disconnect(){if(this.observed){this.observed=false;observers--;}}
@@ -105,7 +107,12 @@ class TrackballControls {
  dispose(){}
 }
 globalThis.__TrackballControls=TrackballControls;
-function step(now){const callbacks=[...frames.values()];frames.clear();callbacks.forEach(fn=>fn(now));}
+function step(now){
+ clock=now;
+ const due=[...timers.entries()].filter(([,timer])=>timer.due<=now);
+ due.forEach(([id])=>timers.delete(id));due.forEach(([,timer])=>timer.fn());
+ const callbacks=[...frames.values()];frames.clear();callbacks.forEach(fn=>fn(now));
+}
 class Renderer {
  constructor({canvas}){rendererCount++;this.canvas=canvas;this.ratio=1;this.geometries=new Set();this.textures=new Set();
   this.info={memory:{geometries:0,textures:0},programs:[]};this.context={lost:false,isContextLost(){return this.lost;}};}
@@ -187,6 +194,7 @@ assert.equal(disposeCount,1);assert.equal(lossCount,1);assert.equal(observers,0)
 assert.equal(renderTargetCount,1);assert.equal(renderTargetDisposeCount,1);
 assert.equal(canvas.handlers.size,0);assert.equal(canvas.width,1);assert.equal(canvas.height,1);
 assert.equal(container.children.length,1);
+assert.equal(timers.size,0);
 """)
 
     def test_animation_loop_caps_240hz_display_at_60fps(self):
