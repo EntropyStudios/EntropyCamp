@@ -280,6 +280,14 @@ class FeishuNotifierTests(unittest.TestCase):
 
 
 class HeaderClockFirstPaintTests(unittest.TestCase):
+    def test_header_clock_animation_is_capped_at_sixty_hz(self):
+        app = (Path(__file__).parent / "app.js").read_text(encoding="utf-8")
+        self.assertIn("const HEADER_CLOCK_MAX_FPS = 60", app)
+        self.assertIn("const HEADER_CLOCK_FRAME_INTERVAL_MS = 1000 / HEADER_CLOCK_MAX_FPS", app)
+        self.assertIn("function scheduleCorpusClockFrame", app)
+        self.assertIn("corpusClockAnimationTimer = setTimeout", app)
+        self.assertIn("clearTimeout(corpusClockAnimationTimer)", app)
+
     @staticmethod
     def _bern_snapshots(*timestamps):
         project_root = Path(__file__).parent

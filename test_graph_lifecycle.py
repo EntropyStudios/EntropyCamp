@@ -204,9 +204,27 @@ const graph=createConversationGraph({canvas,container,nodes:original});
 for(let tick=0;tick<=240;tick++)step(tick*(1000/240));
 const diagnostics=graph.getDiagnostics();
 assert.equal(container.dataset.graphFrameRateLimit,'60');
+assert.equal(container.dataset.graphNodePositions,undefined,'production loop serialized node positions');
+assert.equal(container.dataset.graphNodeStates,undefined,'production loop serialized node states');
 assert.ok(diagnostics.frameCount>=58,`rendered only ${diagnostics.frameCount} frames`);
 assert.ok(diagnostics.frameCount<=62,`rendered ${diagnostics.frameCount} frames on a 240Hz display`);
 assert.ok(diagnostics.wallElapsed>.94&&diagnostics.wallElapsed<1.02,`animation time drifted to ${diagnostics.wallElapsed}`);
+graph.dispose();
+""")
+
+    def test_label_measurements_are_cached_until_text_changes(self):
+        self.run_graph(r"""
+const canvas=new Element('canvas'),container=new Element();container.append(canvas);
+const graph=createConversationGraph({canvas,container,nodes:original});
+graph.renderOnce(.02);
+const first=graph.getDiagnostics().labelMeasurements;
+for(let index=0;index<120;index++)graph.renderOnce(.02);
+const stable=graph.getDiagnostics().labelMeasurements;
+assert.equal(stable,first,'unchanged labels were measured every frame');
+graph.update({nodes:original.map(node=>node.id==='t0'?{...node,label:'Longer updated task title'}:node)});
+graph.renderOnce(.02);
+const changed=graph.getDiagnostics().labelMeasurements;
+assert.ok(changed>stable,'changed label did not invalidate its cached measurement');
 graph.dispose();
 """)
 
