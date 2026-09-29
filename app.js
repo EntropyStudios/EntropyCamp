@@ -532,9 +532,9 @@ function homeTodoDueLabel(timestamp) {
 
 function renderTodayTodoStrip() {
   if (!todayTodoSummary || !todayTodoItems) return;
-  const summary = todoCore.todaySummary(todoStore.items);
-  const visible = todoCore.sortItems(todoStore.items, "today").slice(0, 4);
-  todayTodoSummary.textContent = `${summary.completed}/${summary.total}`;
+  const summary = todoCore.summary(todoStore.items);
+  const visible = todoCore.sortItems(todoStore.items, "open").slice(0, 4);
+  todayTodoSummary.textContent = String(summary.remaining);
   todayTodoItems.innerHTML = visible.length
     ? visible.map((item) => `
       <button class="today-todo-item${item.priority === "high" ? " is-high" : ""}" type="button" data-home-todo="${escapeHtml(item.id)}" aria-label="完成 ${escapeHtml(item.title)}">
@@ -542,10 +542,10 @@ function renderTodayTodoStrip() {
         <strong>${escapeHtml(item.title)}</strong>
         ${item.dueAt ? `<time datetime="${new Date(item.dueAt).toISOString()}">${escapeHtml(homeTodoDueLabel(item.dueAt))}</time>` : ""}
       </button>`).join("")
-    : `<a class="today-todo-empty" href="todo.html?view=today">${summary.total ? "今天的待办已经完成" : "今天还没有待办"}</a>`;
+    : `<a class="today-todo-empty" href="todo.html?view=open">没有未完成的待办</a>`;
   const remaining = summary.remaining - visible.length;
   if (remaining > 0) {
-    todayTodoItems.insertAdjacentHTML("beforeend", `<a class="today-todo-more" href="todo.html?view=today">+${remaining}</a>`);
+    todayTodoItems.insertAdjacentHTML("beforeend", `<a class="today-todo-more" href="todo.html?view=open">+${remaining}</a>`);
   }
 }
 
@@ -558,11 +558,11 @@ async function addQuickTodo(event) {
     id: crypto.randomUUID?.() || `todo-${now}-${Math.random().toString(16).slice(2)}`,
     title,
     note: "",
-    section: "today",
+    section: "open",
     priority: "normal",
     dueAt: null,
     completedAt: null,
-    order: todoCore.nextOrder(todoStore.items, "today"),
+    order: todoCore.nextOrder(todoStore.items),
     createdAt: now,
     updatedAt: now,
   };

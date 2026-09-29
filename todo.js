@@ -16,7 +16,6 @@
   const dialogTitle = document.querySelector("#todoDialogTitle");
   const idInput = document.querySelector("#todoId");
   const titleInput = document.querySelector("#todoTitle");
-  const sectionInput = document.querySelector("#todoSection");
   const priorityInput = document.querySelector("#todoPriority");
   const dueInput = document.querySelector("#todoDueAt");
   const noteInput = document.querySelector("#todoNote");
@@ -25,8 +24,9 @@
 
   let store = loadStore();
   let items = store.items;
-  let view = new URLSearchParams(location.search).get("view") || "today";
-  if (!["today", "inbox", "later", "completed"].includes(view)) view = "today";
+  const requestedView = new URLSearchParams(location.search).get("view");
+  let view = requestedView === "history" || requestedView === "completed" ? "history" : "open";
+  if (requestedView !== view) history.replaceState(null, "", `?view=${view}`);
   let editingBase;
   let returnFocus = null;
   let deleteArmed = false;
@@ -93,10 +93,8 @@
 
   function renderTabs() {
     const counts = {
-      today: core.sortItems(items, "today").length,
-      inbox: core.sortItems(items, "inbox").length,
-      later: core.sortItems(items, "later").length,
-      completed: core.sortItems(items, "completed").length,
+      open: core.sortItems(items, "open").length,
+      history: core.sortItems(items, "history").length,
     };
     document.querySelectorAll("[data-todo-view]").forEach((tab) => {
       const active = tab.dataset.todoView === view;
@@ -104,8 +102,7 @@
       tab.setAttribute("aria-pressed", String(active));
       tab.querySelector("span").textContent = String(counts[tab.dataset.todoView]);
     });
-    const total = counts.today + counts.inbox + counts.later;
-    pageCount.textContent = `${total} 项未完成`;
+    pageCount.textContent = `${counts.open} 项未完成`;
   }
 
   function rowElement(item, visible) {
@@ -177,7 +174,7 @@
     list.replaceChildren(...visible.map((item) => rowElement(item, visible)));
     list.hidden = !visible.length;
     empty.hidden = Boolean(visible.length);
-    emptyTitle.textContent = view === "completed" ? "还没有已完成的待办" : view === "today" ? "今天没有待办" : view === "inbox" ? "收集箱是空的" : "稍后没有待办";
+    emptyTitle.textContent = view === "history" ? "还没有历史记录" : "没有未完成的待办";
     renderTabs();
     if (!animate || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     requestAnimationFrame(() => {
@@ -214,7 +211,6 @@
     resetDeleteArm();
     idInput.value = item?.id || "";
     titleInput.value = item?.title || "";
-    sectionInput.value = item?.section || (view === "completed" ? "today" : view);
     priorityInput.value = item?.priority || "normal";
     dueInput.value = localInputValue(item?.dueAt);
     noteInput.value = item?.note || "";
@@ -238,11 +234,11 @@
       id: existing?.id || crypto.randomUUID?.() || `todo-${now}-${Math.random().toString(16).slice(2)}`,
       title: titleInput.value.trim(),
       note: noteInput.value.trim(),
-      section: sectionInput.value,
+      section: existing?.section || "open",
       priority: priorityInput.value,
       dueAt: Number.isFinite(dueAt) ? dueAt : null,
       completedAt: existing?.completedAt || null,
-      order: existing?.section === sectionInput.value ? existing.order : core.nextOrder(items, sectionInput.value),
+      order: existing ? existing.order : core.nextOrder(items),
       createdAt: existing?.createdAt || now,
       updatedAt: now,
     };

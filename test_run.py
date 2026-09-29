@@ -1913,7 +1913,7 @@ class TodoPageTests(unittest.TestCase):
 
         for element_id in ("todayTodoStrip", "todayTodoItems", "quickTodoForm", "quickTodoTitle"):
             self.assertIn(f'id="{element_id}"', index)
-        self.assertIn('href="todo.html?view=today"', index)
+        self.assertIn('href="todo.html?view=open"', index)
         topbar_end = index.index("</header>", index.index('class="topbar"'))
         self.assertLess(index.index('id="todayTodoStrip"'), topbar_end)
         self.assertLess(index.index('src="todo-core.js"'), index.index('src="state-client.js"'))
@@ -1921,10 +1921,13 @@ class TodoPageTests(unittest.TestCase):
         self.assertIn("renderTodayTodoStrip()", app)
         self.assertIn("completeHomeTodo", app)
 
-        for element_id in ("todoList", "newTodoButton", "todoDialog", "todoTitle", "todoSection", "todoPriority"):
+        for element_id in ("todoList", "newTodoButton", "todoDialog", "todoTitle", "todoPriority"):
             self.assertIn(f'id="{element_id}"', html)
-        for view in ("today", "inbox", "later", "completed"):
+        self.assertNotIn('id="todoSection"', html)
+        for view in ("open", "history"):
             self.assertIn(f'data-todo-view="{view}"', html)
+        for legacy_view in ("today", "inbox", "later", "completed"):
+            self.assertNotIn(f'data-todo-view="{legacy_view}"', html)
         self.assertLess(html.index('src="todo-core.js"'), html.index('src="state-client.js"'))
         self.assertIn('"lumen-todos-v1"', state_client)
         self.assertIn("businessState.subscribe", script)

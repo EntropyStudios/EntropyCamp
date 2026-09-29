@@ -30,7 +30,7 @@ console.log(JSON.stringify(core.normalizeStore({version:1,items:[
         self.assertEqual(result["items"][0]["section"], "today")
         self.assertEqual(result["items"][0]["priority"], "high")
         self.assertNotEqual(result["items"][0]["id"], result["items"][1]["id"])
-        self.assertEqual(result["items"][1]["section"], "inbox")
+        self.assertEqual(result["items"][1]["section"], "open")
 
     def test_views_priority_summary_and_reordering_are_stable(self):
         result = self.run_core(r"""
@@ -44,18 +44,18 @@ const items=core.normalizeStore({version:1,items:[
 ]}).items;
 const moved=core.moveItem(items,'normal',1);
 console.log(JSON.stringify({
- today:core.sortItems(items,'today').map(x=>x.id),
- completed:core.sortItems(items,'completed').map(x=>x.id),
- summary:core.todaySummary(items),
- moved:core.sortItems(moved,'today').map(x=>x.id),
+ open:core.sortItems(items,'open').map(x=>x.id),
+ history:core.sortItems(items,'history').map(x=>x.id),
+ summary:core.summary(items),
+ moved:core.sortItems(moved,'open').map(x=>x.id),
  original:items.map(x=>[x.id,x.order]),
- next:core.nextOrder(items,'today'),
+next:core.nextOrder(items),
 }));
 """)
-        self.assertEqual(result["today"], ["high", "normal", "normal-2"])
-        self.assertEqual(result["completed"], ["done"])
-        self.assertEqual(result["summary"], {"total": 4, "completed": 1, "remaining": 3})
-        self.assertEqual(result["moved"], ["high", "normal-2", "normal"])
+        self.assertEqual(result["open"], ["later", "high", "normal", "normal-2"])
+        self.assertEqual(result["history"], ["done"])
+        self.assertEqual(result["summary"], {"total": 5, "completed": 1, "remaining": 4})
+        self.assertEqual(result["moved"], ["later", "high", "normal-2", "normal"])
         self.assertEqual(result["original"], [["normal", 0], ["normal-2", 1], ["high", 9], ["done", 3], ["later", 4]])
         self.assertEqual(result["next"], 10)
 

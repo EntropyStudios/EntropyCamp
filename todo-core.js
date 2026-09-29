@@ -9,7 +9,7 @@
   const MAX_ITEMS = 1000;
   const MAX_TITLE_LENGTH = 120;
   const MAX_NOTE_LENGTH = 1600;
-  const SECTIONS = Object.freeze(["inbox", "today", "later"]);
+  const SECTIONS = Object.freeze(["open", "inbox", "today", "later"]);
   const PRIORITIES = Object.freeze(["high", "normal", "low"]);
   const PRIORITY_RANK = Object.freeze({ high: 0, normal: 1, low: 2 });
 
@@ -46,7 +46,7 @@
       seen.add(id);
       const title = typeof raw.title === "string" ? raw.title.trim().slice(0, MAX_TITLE_LENGTH) : "";
       if (!title) continue;
-      const section = SECTIONS.includes(raw.section) ? raw.section : "inbox";
+      const section = SECTIONS.includes(raw.section) ? raw.section : "open";
       const priority = PRIORITIES.includes(raw.priority) ? raw.priority : "normal";
       const completedAt = finiteTimestamp(raw.completedAt);
       const dueAt = finiteTimestamp(raw.dueAt);
@@ -72,13 +72,13 @@
     };
   }
 
-  function sortItems(items, view = "today") {
+  function sortItems(items, view = "open") {
     const values = (Array.isArray(items) ? items : []).filter((item) => {
-      if (view === "completed") return Boolean(item.completedAt);
-      return !item.completedAt && item.section === view;
+      if (view === "history" || view === "completed") return Boolean(item.completedAt);
+      return !item.completedAt;
     });
     return values.slice().sort((left, right) => {
-      if (view === "completed") return right.completedAt - left.completedAt || right.updatedAt - left.updatedAt;
+      if (view === "history" || view === "completed") return right.completedAt - left.completedAt || right.updatedAt - left.updatedAt;
       const priority = PRIORITY_RANK[left.priority] - PRIORITY_RANK[right.priority];
       if (priority) return priority;
       if (left.order !== right.order) return left.order - right.order;
@@ -86,15 +86,15 @@
     });
   }
 
-  function todaySummary(items) {
-    const today = (Array.isArray(items) ? items : []).filter((item) => item.section === "today");
-    const completed = today.filter((item) => item.completedAt).length;
-    return { total: today.length, completed, remaining: today.length - completed };
+  function summary(items) {
+    const values = Array.isArray(items) ? items : [];
+    const completed = values.filter((item) => item.completedAt).length;
+    return { total: values.length, completed, remaining: values.length - completed };
   }
 
-  function nextOrder(items, section) {
+  function nextOrder(items) {
     const orders = (Array.isArray(items) ? items : [])
-      .filter((item) => item.section === section && !item.completedAt)
+      .filter((item) => !item.completedAt)
       .map((item) => Number(item.order))
       .filter(Number.isFinite);
     return orders.length ? Math.max(...orders) + 1 : 0;
@@ -104,7 +104,7 @@
     const source = Array.isArray(items) ? items.map((item) => ({ ...item })) : [];
     const current = source.find((item) => item.id === id);
     if (!current || current.completedAt) return source;
-    const ordered = sortItems(source, current.section).filter((item) => item.priority === current.priority);
+    const ordered = sortItems(source, "open").filter((item) => item.priority === current.priority);
     const index = ordered.findIndex((item) => item.id === id);
     const targetIndex = Math.max(0, Math.min(ordered.length - 1, index + Math.sign(direction)));
     if (index < 0 || index === targetIndex) return source;
@@ -122,7 +122,8 @@
     PRIORITIES,
     normalizeStore,
     sortItems,
-    todaySummary,
+    summary,
+    todaySummary: summary,
     nextOrder,
     moveItem,
   });
