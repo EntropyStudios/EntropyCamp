@@ -1,12 +1,13 @@
 (function exposeSharedState() {
   "use strict";
-  const keys = ["lumen-reminder-cards-v1", "lumen-reminder-work-session-v1", "lumen-reminder-work-history-v1", "lumen-multi-clipboard-v1", "lumen-todos-v1"];
+  const keys = ["lumen-reminder-cards-v1", "lumen-reminder-work-session-v1", "lumen-reminder-work-history-v1", "lumen-multi-clipboard-v1", "lumen-todos-v1", "entropycamp-task-sync-v1"];
   const defaults = {
     "lumen-reminder-cards-v1": [],
     "lumen-reminder-work-session-v1": { active: false, startedAt: null, endedAt: null, countsByCardId: {}, countedTurnIdsByCardId: {} },
     "lumen-reminder-work-history-v1": { version: 2, updatedAt: 0, entries: [] },
     "lumen-multi-clipboard-v1": { version: 1, updatedAt: 0, items: [] },
     "lumen-todos-v1": { version: 1, updatedAt: 0, items: [] },
+    "entropycamp-task-sync-v1": { version: 1, updatedAt: 0, lastTriggeredAt: null, managerThreadId: "", managerThreadName: "", selectedSourceRefs: null, runs: [] },
   };
   const listeners = new Set();
   let data = {};

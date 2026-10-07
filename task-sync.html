@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <title>任务同步</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="task-sync.css" />
+  </head>
+  <body>
+    <div class="page task-sync-page">
+      <header class="task-sync-topbar">
+        <div class="task-sync-heading">
+          <div><span>TASK SYNC</span><h1>任务同步</h1></div>
+          <p>Codex 增量对话 · 人工确认后提交</p>
+        </div>
+        <a class="work-button link-button" href="./">返回提醒</a>
+      </header>
+
+      <main class="task-sync-main">
+        <section class="sync-control" aria-labelledby="syncControlTitle">
+          <div class="sync-control-head">
+            <div><span>NEW SYNC</span><h2 id="syncControlTitle">开始一次同步</h2><p id="windowDescription">正在读取上次同步时间…</p></div>
+            <button class="new-button sync-analyze-button" id="analyzeButton" type="button">
+              <svg aria-hidden="true"><use href="#icon-spark"></use></svg><span>分析新增对话</span>
+            </button>
+          </div>
+          <div class="sync-target-row">
+            <div class="sync-target">
+              <span class="sync-target-icon" aria-hidden="true"><svg><use href="#icon-route"></use></svg></span>
+              <span><small>统管对话</small><strong id="managerThreadName">正在识别…</strong></span>
+            </div>
+            <label class="sync-window-field" for="windowStartInput">
+              <span class="sync-target-icon" aria-hidden="true"><svg><use href="#icon-clock"></use></svg></span>
+              <span><small>同步起点</small><input id="windowStartInput" type="datetime-local" /></span>
+            </label>
+          </div>
+          <div class="source-picker">
+            <div class="source-picker-head">
+              <div><h3>来源对话</h3><span id="sourceSelectionSummary">正在读取…</span></div>
+              <div class="source-picker-actions">
+                <label class="source-search" for="sourceSearch">
+                  <svg aria-hidden="true"><use href="#icon-search"></use></svg>
+                  <input id="sourceSearch" type="search" autocomplete="off" placeholder="搜索对话或目录" />
+                </label>
+                <button class="secondary-button" id="toggleSourcesButton" type="button">清空当前</button>
+              </div>
+            </div>
+            <div class="source-thread-list" id="sourceThreadList" role="group" aria-label="选择需要统计的 Codex 对话"></div>
+          </div>
+        </section>
+
+        <div class="sync-workspace">
+          <aside class="run-panel">
+            <div class="section-heading">
+              <div><span>RUNS</span><h2>同步历史</h2></div>
+              <button class="icon-button" id="refreshButton" type="button" title="刷新" aria-label="刷新同步历史">
+                <svg aria-hidden="true"><use href="#icon-refresh"></use></svg>
+              </button>
+            </div>
+            <div class="run-list" id="runList"></div>
+          </aside>
+
+          <section class="review-panel" id="reviewPanel" aria-live="polite">
+            <div class="empty-state" id="emptyState">
+              <span class="empty-state-icon" aria-hidden="true"><svg><use href="#icon-review"></use></svg></span>
+              <strong>等待同步结果</strong><span>开始一次同步，或从左侧打开历史批次。</span>
+            </div>
+            <div id="reviewContent" hidden>
+              <div class="review-header">
+                <div><p class="run-window" id="runWindow"></p><h2 id="runTitle">分析结果</h2><p id="runMeta"></p></div>
+                <span class="status-badge" id="runStatus"></span>
+              </div>
+              <div class="error-box" id="runError" hidden></div>
+              <div class="waiting-box" id="waitingBox" hidden><span class="waiting-indicator" aria-hidden="true"></span><span id="waitingText"></span></div>
+              <form id="reviewForm" hidden>
+                <label class="summary-field"><span>本次判断</span><textarea id="analysisSummary" rows="3"></textarea></label>
+
+                <section class="result-section">
+                  <div class="section-heading"><div><span>EXISTING ISSUES</span><h3>更新已有 Linear</h3><p>勾选需要交由统管对话更新的条目。</p></div><span class="count-pill" id="linearUpdateCount">0</span></div>
+                  <div id="linearUpdates"></div>
+                </section>
+                <section class="result-section">
+                  <div class="section-heading"><div><span>NEW ISSUES</span><h3>新建 Linear</h3><p>确认标题、归属和验收内容。</p></div><span class="count-pill" id="newLinearCount">0</span></div>
+                  <div id="newLinearTasks"></div>
+                </section>
+                <section class="result-section">
+                  <div class="section-heading"><div><span>FEISHU DRAFTS</span><h3>飞书任务建议</h3><p>保留为可复制建议，不直接写入飞书。</p></div><span class="count-pill" id="feishuCount">0</span></div>
+                  <div id="feishuTasks"></div>
+                </section>
+                <section class="result-section muted-section" id="ignoredSection" hidden>
+                  <div class="section-heading"><div><span>IGNORED</span><h3>本次忽略</h3></div></div><div id="ignoredItems"></div>
+                </section>
+                <div class="submit-bar">
+                  <p>只有提交确认后，选择结果才会发回统管对话。</p>
+                  <button class="new-button" id="submitDecisionButton" type="submit"><svg aria-hidden="true"><use href="#icon-send"></use></svg><span>提交确认结果</span></button>
+                </div>
+              </form>
+              <section class="execution-result" id="executionResult" hidden>
+                <div class="section-heading"><div><span>EXECUTION</span><h3>统管对话执行结果</h3></div></div><pre id="executionResultText"></pre>
+              </section>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></div>
+    <svg hidden aria-hidden="true">
+      <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></symbol>
+      <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5" /><path d="M7.5 7.5A7 7 0 0 1 19 10M5 14a7 7 0 0 0 11.5 2.5" /></symbol>
+      <symbol id="icon-route" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2" /><circle cx="18" cy="6" r="2" /><path d="M8 18h3a3 3 0 0 0 3-3V9a3 3 0 0 1 3-3" /></symbol>
+      <symbol id="icon-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2" /></symbol>
+      <symbol id="icon-spark" viewBox="0 0 24 24"><path d="m12 3 1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3Z" /><path d="m18.5 15 .8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2Z" /></symbol>
+      <symbol id="icon-review" viewBox="0 0 24 24"><path d="M5 4h14v16H5z" /><path d="M8 9h8M8 13h5M8 17h3" /></symbol>
+      <symbol id="icon-send" viewBox="0 0 24 24"><path d="m4 4 17 8-17 8 3-8-3-8Z" /><path d="M7 12h14" /></symbol>
+    </svg>
+    <script src="task-sync.js"></script>
+  </body>
+</html>

@@ -16,12 +16,22 @@ SESSION = "lumen-reminder-work-session-v1"
 HISTORY = "lumen-reminder-work-history-v1"
 CLIPBOARD = "lumen-multi-clipboard-v1"
 TODOS = "lumen-todos-v1"
+TASK_SYNC = "entropycamp-task-sync-v1"
 DEFAULTS = {
     CARDS: [],
     SESSION: {"active": False, "startedAt": None, "endedAt": None, "countsByCardId": {}, "countedTurnIdsByCardId": {}},
     HISTORY: {"version": 2, "updatedAt": 0, "entries": []},
     CLIPBOARD: {"version": 1, "updatedAt": 0, "items": []},
     TODOS: {"version": 1, "updatedAt": 0, "items": []},
+    TASK_SYNC: {
+        "version": 1,
+        "updatedAt": 0,
+        "lastTriggeredAt": None,
+        "managerThreadId": "",
+        "managerThreadName": "",
+        "selectedSourceRefs": None,
+        "runs": [],
+    },
 }
 MISSING = object()
 
@@ -63,11 +73,28 @@ def _validate(key: str, value: Any) -> None:
     json.dumps(value, ensure_ascii=False, allow_nan=False)
     if key == CARDS:
         rows = value
-    elif key in {HISTORY, CLIPBOARD, TODOS}:
+    elif key in {HISTORY, CLIPBOARD, TODOS, TASK_SYNC}:
         expected = 2 if key == HISTORY else 1
         if not isinstance(value, dict) or value.get("version") != expected:
             raise ValueError("不支持的数据版本")
-        rows = value.get("entries" if key == HISTORY else "items")
+        if key == HISTORY:
+            rows = value.get("entries")
+        elif key == TASK_SYNC:
+            rows = value.get("runs")
+            if value.get("lastTriggeredAt") is not None and not isinstance(
+                value.get("lastTriggeredAt"), (int, float)
+            ):
+                raise ValueError("任务同步时间无效")
+            if not isinstance(value.get("managerThreadId", ""), str):
+                raise ValueError("统管对话无效")
+            selected_sources = value.get("selectedSourceRefs")
+            if selected_sources is not None and (
+                not isinstance(selected_sources, list)
+                or any(not isinstance(item, str) for item in selected_sources)
+            ):
+                raise ValueError("来源对话选择无效")
+        else:
+            rows = value.get("items")
     else:
         if not isinstance(value, dict) or not isinstance(value.get("active"), bool):
             raise ValueError("班次数据无效")
@@ -173,6 +200,27 @@ class BusinessStateStore:
                 _validate(key, merged)
                 connection.execute("INSERT OR REPLACE INTO documents VALUES (?, ?)", (key, json.dumps(merged, ensure_ascii=False)))
             connection.execute("UPDATE metadata SET value=CAST(value AS INTEGER)+1 WHERE key='revision'")
+            result = self._snapshot(connection)
+        self._protect()
+        return result
+
+    def mutate(self, key: str, callback):
+        """Atomically replace one document using its current value."""
+        if key not in DEFAULTS:
+            raise ValueError("不支持的数据类型")
+        with self._lock, self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            snapshot = self._snapshot(connection)
+            current = copy.deepcopy(snapshot["data"][key])
+            incoming = callback(current)
+            _validate(key, incoming)
+            connection.execute(
+                "INSERT OR REPLACE INTO documents VALUES (?, ?)",
+                (key, json.dumps(incoming, ensure_ascii=False)),
+            )
+            connection.execute(
+                "UPDATE metadata SET value=CAST(value AS INTEGER)+1 WHERE key='revision'"
+            )
             result = self._snapshot(connection)
         self._protect()
         return result

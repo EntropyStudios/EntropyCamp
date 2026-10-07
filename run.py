@@ -15,6 +15,7 @@ import subprocess
 import threading
 import time
 import urllib.parse
+import uuid
 import webbrowser
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -25,8 +26,16 @@ from typing import Any
 from background_events import BackgroundEventMonitor
 from codex_monitor import CodexRolloutMonitor, CodexStateUnavailable
 from feishu_notify import FeishuNotificationError, FeishuNotifier
+from task_sync import (
+    ANALYSIS_SCHEMA,
+    analysis_prompt,
+    decision_prompt,
+    normalize_analysis,
+    parse_analysis_text,
+    write_json_atomic,
+)
 from widget_service import WidgetSnapshotStore, create_widget_server
-from state_store import BusinessStateStore, StateConflict
+from state_store import BusinessStateStore, StateConflict, TASK_SYNC
 
 
 APP_DIRECTORY = Path(__file__).resolve().parent
@@ -74,7 +83,7 @@ def get_business_store():
     if BUSINESS_STORE is None:
         BUSINESS_STORE = BusinessStateStore()
     return BUSINESS_STORE
-MAX_REPORT_THREADS = 20
+MAX_REPORT_THREADS = 100
 WORK_LOG_EVENT_TYPES = {
     "task_started",
     "task_complete",
@@ -980,6 +989,44 @@ class CodexBridge:
                 )
         return logs
 
+    def read_thread(self, thread_id: str, timeout: float = 30) -> dict[str, Any]:
+        result = self.request(
+            "thread/read",
+            {"threadId": thread_id, "includeTurns": True},
+            timeout=timeout,
+        )
+        thread = result.get("thread")
+        if not isinstance(thread, dict):
+            raise RuntimeError("Codex 对话读取失败")
+        return thread
+
+    def start_turn(
+        self,
+        thread_id: str,
+        prompt: str,
+        *,
+        output_schema: dict[str, Any] | None = None,
+        timeout: float = 30,
+    ) -> dict[str, Any]:
+        thread = self.read_thread(thread_id, timeout=timeout)
+        if any(
+            isinstance(turn, dict) and turn.get("status") == "inProgress"
+            for turn in thread.get("turns") or []
+        ):
+            raise RuntimeError("统管对话正在处理中，请完成后再试")
+        params: dict[str, Any] = {
+            "threadId": thread_id,
+            "input": [{"type": "text", "text": prompt, "text_elements": []}],
+            "turnTrigger": "entropycamp-task-sync",
+        }
+        if output_schema is not None:
+            params["outputSchema"] = output_schema
+        result = self.request("turn/start", params, timeout=timeout)
+        turn = result.get("turn")
+        if not isinstance(turn, dict) or not turn.get("id"):
+            raise RuntimeError("Codex 没有返回有效回合")
+        return turn
+
     @staticmethod
     def _thread_summary(thread: dict[str, Any]) -> dict[str, Any]:
         status = thread.get("status") or {}
@@ -1084,6 +1131,500 @@ for remote_spec in REMOTE_CODEX_SPECS:
         REMOTE_CODEX_BRIDGES[remote_alias] = canonical_bridge
         REMOTE_CODEX_LABELS[remote_alias] = remote_spec["label"]
 FEISHU_NOTIFIER: FeishuNotifier | None = None
+TASK_SYNC_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+    max_workers=1, thread_name_prefix="task-sync"
+)
+TASK_SYNC_PENDING: set[tuple[str, str, str]] = set()
+TASK_SYNC_PENDING_LOCK = threading.RLock()
+
+
+def list_all_codex_threads() -> list[dict[str, Any]]:
+    threads: list[dict[str, Any]] = []
+    try:
+        local_threads = CODEX_BRIDGE.list_threads()
+    except Exception:
+        local_threads = CODEX_MONITOR.list_threads()
+    threads.extend(
+        {**thread, "hostId": "local", "sourceLabel": "本机"}
+        for thread in local_threads
+    )
+
+    def read_remote(item: tuple[str, CodexBridge]) -> list[dict[str, Any]]:
+        host_id, bridge = item
+        try:
+            return [
+                {
+                    **thread,
+                    "hostId": host_id,
+                    "sourceLabel": REMOTE_CODEX_LABELS.get(host_id, host_id),
+                }
+                for thread in bridge.list_threads(timeout=8)
+            ]
+        except Exception:
+            return []
+
+    remote_items = [
+        (spec["id"], REMOTE_CODEX_BRIDGES[spec["id"]])
+        for spec in REMOTE_CODEX_SPECS
+    ]
+    if remote_items:
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=len(remote_items), thread_name_prefix="codex-remote-list"
+        ) as executor:
+            for remote_threads in executor.map(read_remote, remote_items):
+                threads.extend(remote_threads)
+    return threads
+
+
+def save_task_sync_settings(
+    source_refs: list[str] | None = None,
+    manager_thread_id: str | None = None,
+) -> dict[str, Any]:
+    cleaned = None
+    if source_refs is not None:
+        cleaned = list(
+            dict.fromkeys(
+                str(value).strip()
+                for value in source_refs[:MAX_REPORT_THREADS]
+                if str(value).strip() and len(str(value).strip()) <= 256
+            )
+        )
+    manager = None
+    if manager_thread_id is not None:
+        manager_thread_id = str(manager_thread_id).strip()
+        manager = next(
+            (
+                thread
+                for thread in list_all_codex_threads()
+                if thread.get("hostId") == "local"
+                and thread.get("id") == manager_thread_id
+            ),
+            None,
+        )
+        if manager is None:
+            raise ValueError("找不到指定的本机统管对话")
+
+    def save(document: dict[str, Any]) -> dict[str, Any]:
+        document = dict(document)
+        if cleaned is not None:
+            document["selectedSourceRefs"] = cleaned
+        if manager is not None:
+            document["managerThreadId"] = str(manager.get("id") or "")
+            document["managerThreadName"] = str(
+                manager.get("name") or manager.get("preview") or "Codex 统管对话"
+            )
+        document["updatedAt"] = int(time.time() * 1000)
+        return document
+
+    return _task_sync_mutate(save)
+
+
+def _task_sync_mutate(callback) -> dict[str, Any]:
+    snapshot = get_business_store().mutate(TASK_SYNC, callback)
+    return snapshot["data"][TASK_SYNC]
+
+
+def _update_task_sync_run(run_id: str, callback) -> dict[str, Any]:
+    updated_run: dict[str, Any] = {}
+
+    def mutate(document: dict[str, Any]) -> dict[str, Any]:
+        nonlocal updated_run
+        document = dict(document)
+        runs = []
+        found = False
+        for run in document.get("runs") or []:
+            if run.get("id") != run_id:
+                runs.append(run)
+                continue
+            found = True
+            updated_run = callback(dict(run))
+            runs.append(updated_run)
+        if not found:
+            raise ValueError("任务同步批次不存在")
+        document["runs"] = runs[-100:]
+        document["updatedAt"] = int(time.time() * 1000)
+        return document
+
+    _task_sync_mutate(mutate)
+    return updated_run
+
+
+def _read_task_sync_window(
+    threads: list[dict[str, Any]], since_ms: int, until_ms: int
+) -> list[dict[str, Any]]:
+    grouped: dict[str, list[str]] = {}
+    metadata: dict[tuple[str, str], dict[str, Any]] = {}
+    for thread in threads[:MAX_REPORT_THREADS]:
+        host_id = str(thread.get("hostId") or "local")
+        thread_id = str(thread.get("id") or "")
+        if not thread_id:
+            continue
+        grouped.setdefault(host_id, []).append(thread_id)
+        metadata[(host_id, thread_id)] = thread
+
+    logs: list[dict[str, Any]] = []
+    since = since_ms / 1000
+    until = until_ms / 1000
+    for host_id, thread_ids in grouped.items():
+        bridge = CODEX_BRIDGE if host_id == "local" else REMOTE_CODEX_BRIDGES.get(host_id)
+        if bridge is None:
+            continue
+        rows = (
+            CODEX_WORK_LOGS.work_logs(thread_ids, since, until, include_process=False)
+            if host_id == "local"
+            else bridge.work_logs(thread_ids, since, until, include_process=False)
+        )
+        for row in rows:
+            if not row.get("turns"):
+                continue
+            thread_id = str(row.get("id") or "")
+            source = metadata.get((host_id, thread_id), {})
+            logs.append(
+                {
+                    **row,
+                    "hostId": host_id,
+                    "sourceLabel": source.get("sourceLabel") or host_id,
+                    "cwd": source.get("cwd") or "",
+                }
+            )
+    logs.sort(
+        key=lambda row: min(
+            [
+                turn.get("startedAt") or turn.get("completedAt") or float("inf")
+                for turn in row.get("turns") or []
+            ]
+            or [float("inf")]
+        )
+    )
+    return logs
+
+
+def _turn_by_id(thread: dict[str, Any], turn_id: str) -> dict[str, Any] | None:
+    return next(
+        (
+            turn
+            for turn in thread.get("turns") or []
+            if isinstance(turn, dict) and str(turn.get("id") or "") == turn_id
+        ),
+        None,
+    )
+
+
+def _turn_final_text(turn: dict[str, Any]) -> str:
+    final = ""
+    fallback = ""
+    for item in turn.get("items") or []:
+        if not isinstance(item, dict) or item.get("type") != "agentMessage":
+            continue
+        text = _item_text(item)
+        if not text:
+            continue
+        fallback = text
+        if item.get("phase") == "final_answer":
+            final = text
+    return final or fallback
+
+
+def _wait_for_task_sync_turn(thread_id: str, turn_id: str, timeout: float = 3600) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        thread = CODEX_BRIDGE.read_thread(thread_id)
+        turn = _turn_by_id(thread, turn_id)
+        if turn and turn.get("status") != "inProgress":
+            return turn
+        time.sleep(2)
+    raise TimeoutError("Codex 处理任务同步超时")
+
+
+def _finish_task_sync_analysis(run_id: str, manager_thread_id: str, turn_id: str) -> None:
+    try:
+        turn = _wait_for_task_sync_turn(manager_thread_id, turn_id)
+        if turn.get("status") != "completed":
+            raise RuntimeError(f"Codex 分析未完成：{turn.get('status') or 'unknown'}")
+        analysis = parse_analysis_text(_turn_final_text(turn))
+
+        def finish(run: dict[str, Any]) -> dict[str, Any]:
+            run.update(
+                status="review",
+                analysis=analysis,
+                analysisCompletedAt=int(time.time() * 1000),
+                error="",
+            )
+            return run
+
+        _update_task_sync_run(run_id, finish)
+    except Exception as error:
+        def fail(run: dict[str, Any]) -> dict[str, Any]:
+            run.update(status="failed", error=str(error), failedAt=int(time.time() * 1000))
+            return run
+
+        _update_task_sync_run(run_id, fail)
+
+
+def _finish_task_sync_execution(run_id: str, manager_thread_id: str, turn_id: str) -> None:
+    try:
+        turn = _wait_for_task_sync_turn(manager_thread_id, turn_id)
+        if turn.get("status") != "completed":
+            raise RuntimeError(f"Codex 执行未完成：{turn.get('status') or 'unknown'}")
+        result_text = _turn_final_text(turn)
+
+        def finish(run: dict[str, Any]) -> dict[str, Any]:
+            run.update(
+                status="completed",
+                executionResult=result_text,
+                executionCompletedAt=int(time.time() * 1000),
+                error="",
+            )
+            return run
+
+        _update_task_sync_run(run_id, finish)
+    except Exception as error:
+        def fail(run: dict[str, Any]) -> dict[str, Any]:
+            run.update(status="review", error=str(error), failedAt=int(time.time() * 1000))
+            return run
+
+        _update_task_sync_run(run_id, fail)
+
+
+def _schedule_task_sync_wait(
+    kind: str, run_id: str, manager_thread_id: str, turn_id: str
+) -> None:
+    key = (kind, run_id, turn_id)
+    with TASK_SYNC_PENDING_LOCK:
+        if key in TASK_SYNC_PENDING:
+            return
+        TASK_SYNC_PENDING.add(key)
+
+    worker = (
+        _finish_task_sync_analysis
+        if kind == "analysis"
+        else _finish_task_sync_execution
+    )
+
+    def run_worker() -> None:
+        try:
+            worker(run_id, manager_thread_id, turn_id)
+        finally:
+            with TASK_SYNC_PENDING_LOCK:
+                TASK_SYNC_PENDING.discard(key)
+
+    TASK_SYNC_EXECUTOR.submit(run_worker)
+
+
+def reconcile_task_sync_runs(state: dict[str, Any]) -> None:
+    for run in state.get("runs") or []:
+        status = run.get("status")
+        if status == "analyzing" and run.get("analysisTurnId"):
+            _schedule_task_sync_wait(
+                "analysis",
+                str(run.get("id") or ""),
+                str(run.get("managerThreadId") or ""),
+                str(run.get("analysisTurnId") or ""),
+            )
+        elif status == "executing" and run.get("executionTurnId"):
+            _schedule_task_sync_wait(
+                "execution",
+                str(run.get("id") or ""),
+                str(run.get("managerThreadId") or ""),
+                str(run.get("executionTurnId") or ""),
+            )
+
+
+def start_task_sync_analysis(
+    manager_thread_id: str,
+    since_ms: int | None = None,
+    source_thread_refs: list[str] | None = None,
+) -> dict[str, Any]:
+    manager_thread_id = str(manager_thread_id or "").strip()
+    if not manager_thread_id:
+        raise ValueError("请先选择统管对话")
+    now_ms = int(time.time() * 1000)
+    current = get_business_store().snapshot()["data"][TASK_SYNC]
+    if any(run.get("status") in {"analyzing", "executing"} for run in current.get("runs") or []):
+        raise StateConflict("已有任务同步正在处理中")
+    known_threads = list_all_codex_threads()
+    manager = next(
+        (
+            thread
+            for thread in known_threads
+            if thread.get("hostId") == "local" and thread.get("id") == manager_thread_id
+        ),
+        None,
+    )
+    if manager is None:
+        raise ValueError("找不到选择的本机统管对话")
+    if source_thread_refs is not None:
+        requested = {
+            str(value).strip()
+            for value in source_thread_refs[:MAX_REPORT_THREADS]
+            if str(value).strip()
+        }
+        known_threads = [
+            thread
+            for thread in known_threads
+            if (
+                str(thread.get("id") or "")
+                if thread.get("hostId") == "local"
+                else f"{thread.get('hostId')}::{thread.get('id')}"
+            )
+            in requested
+        ]
+        if not known_threads:
+            raise ValueError("请至少勾选一条需要统计的 Codex 对话")
+    if since_ms is None:
+        saved = current.get("lastTriggeredAt")
+        if isinstance(saved, (int, float)):
+            since_ms = int(saved)
+        else:
+            local_now = datetime.now().astimezone()
+            since_ms = int(local_now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
+    if since_ms < 0 or since_ms > now_ms:
+        raise ValueError("同步起始时间无效")
+
+    logs = _read_task_sync_window(known_threads, since_ms, now_ms)
+    run_id = f"sync-{now_ms}-{uuid.uuid4().hex[:8]}"
+    artifact_directory = get_business_store().directory / "task-sync"
+    bundle_path = artifact_directory / f"{run_id}-input.json"
+    bundle = {
+        "version": 1,
+        "runId": run_id,
+        "windowStart": since_ms,
+        "windowEnd": now_ms,
+        "threads": logs,
+    }
+    write_json_atomic(bundle_path, bundle)
+    run = {
+        "id": run_id,
+        "createdAt": now_ms,
+        "windowStart": since_ms,
+        "windowEnd": now_ms,
+        "status": "analyzing",
+        "managerThreadId": manager_thread_id,
+        "managerThreadName": manager.get("name") or "Codex 统管对话",
+        "bundlePath": str(bundle_path),
+        "sourceThreadCount": len(logs),
+        "selectedSourceCount": len(known_threads),
+        "sourceTurnCount": sum(len(row.get("turns") or []) for row in logs),
+        "analysis": None,
+        "decisionRevisions": [],
+        "error": "",
+    }
+
+    def add_run(document: dict[str, Any]) -> dict[str, Any]:
+        document = dict(document)
+        document["managerThreadId"] = manager_thread_id
+        document["managerThreadName"] = run["managerThreadName"]
+        if source_thread_refs is not None:
+            document["selectedSourceRefs"] = list(
+                dict.fromkeys(str(value) for value in source_thread_refs)
+            )
+        document["lastTriggeredAt"] = now_ms
+        document["updatedAt"] = now_ms
+        document["runs"] = ([run] + list(document.get("runs") or []))[:100]
+        return document
+
+    _task_sync_mutate(add_run)
+    if not logs:
+        empty = normalize_analysis(
+            {
+                "summary": "该时间窗口内没有读取到新增 Codex 对话。",
+                "linearUpdates": [],
+                "newLinearTasks": [],
+                "feishuTasks": [],
+                "ignored": [],
+            }
+        )
+
+        def finish_empty(value: dict[str, Any]) -> dict[str, Any]:
+            value.update(status="review", analysis=empty, analysisCompletedAt=now_ms)
+            return value
+
+        return _update_task_sync_run(run_id, finish_empty)
+
+    try:
+        turn = CODEX_BRIDGE.start_turn(
+            manager_thread_id,
+            analysis_prompt(bundle_path, since_ms, now_ms),
+            output_schema=ANALYSIS_SCHEMA,
+        )
+    except Exception as error:
+        def fail_start(value: dict[str, Any]) -> dict[str, Any]:
+            value.update(status="failed", error=str(error), failedAt=int(time.time() * 1000))
+            return value
+
+        _update_task_sync_run(run_id, fail_start)
+        raise
+
+    def set_turn(value: dict[str, Any]) -> dict[str, Any]:
+        value["analysisTurnId"] = str(turn["id"])
+        return value
+
+    run = _update_task_sync_run(run_id, set_turn)
+    _schedule_task_sync_wait(
+        "analysis", run_id, manager_thread_id, str(turn["id"])
+    )
+    return run
+
+
+def submit_task_sync_decision(run_id: str, analysis: dict[str, Any]) -> dict[str, Any]:
+    current = get_business_store().snapshot()["data"][TASK_SYNC]
+    run = next((row for row in current.get("runs") or [] if row.get("id") == run_id), None)
+    if run is None:
+        raise ValueError("任务同步批次不存在")
+    if run.get("status") not in {"review", "completed"}:
+        raise StateConflict("当前批次还不能提交")
+    normalized = normalize_analysis(analysis)
+    revision = len(run.get("decisionRevisions") or []) + 1
+    decision = {
+        "version": 1,
+        "runId": run_id,
+        "revision": revision,
+        "submittedAt": int(time.time() * 1000),
+        "analysis": normalized,
+    }
+    decision_path = (
+        get_business_store().directory
+        / "task-sync"
+        / f"{run_id}-decision-{revision}.json"
+    )
+    write_json_atomic(decision_path, decision)
+    turn = CODEX_BRIDGE.start_turn(
+        str(run.get("managerThreadId") or ""),
+        decision_prompt(
+            run_id,
+            Path(str(run.get("bundlePath") or "")),
+            decision_path,
+            revision,
+        ),
+    )
+
+    def set_execution(value: dict[str, Any]) -> dict[str, Any]:
+        revisions = list(value.get("decisionRevisions") or [])
+        revisions.append(
+            {
+                "revision": revision,
+                "submittedAt": decision["submittedAt"],
+                "decisionPath": str(decision_path),
+                "turnId": str(turn["id"]),
+            }
+        )
+        value.update(
+            status="executing",
+            analysis=normalized,
+            decisionRevisions=revisions,
+            executionTurnId=str(turn["id"]),
+            error="",
+        )
+        return value
+
+    updated = _update_task_sync_run(run_id, set_execution)
+    _schedule_task_sync_wait(
+        "execution",
+        run_id,
+        str(run.get("managerThreadId") or ""),
+        str(turn["id"]),
+    )
+    return updated
 
 
 def _merge_codex_thread_metadata(
@@ -1333,35 +1874,7 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
         return values[0].lower() in {"1", "true", "yes", "on"}
 
     def _list_codex_threads(self) -> list[dict[str, Any]]:
-        threads: list[dict[str, Any]] = []
-        try:
-            local_threads = CODEX_BRIDGE.list_threads()
-        except Exception:
-            local_threads = CODEX_MONITOR.list_threads()
-        for thread in local_threads:
-            threads.append({**thread, "hostId": "local", "sourceLabel": "本机"})
-
-        def read_remote(item: tuple[str, CodexBridge]) -> list[dict[str, Any]]:
-            host_id, bridge = item
-            try:
-                return [
-                    {**thread, "hostId": host_id, "sourceLabel": REMOTE_CODEX_LABELS.get(host_id, host_id)}
-                    for thread in bridge.list_threads(timeout=8)
-                ]
-            except Exception:
-                return []
-
-        remote_items = [
-            (spec["id"], REMOTE_CODEX_BRIDGES[spec["id"]])
-            for spec in REMOTE_CODEX_SPECS
-        ]
-        if remote_items:
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=len(remote_items), thread_name_prefix="codex-remote-list"
-            ) as executor:
-                for remote_threads in executor.map(read_remote, remote_items):
-                    threads.extend(remote_threads)
-        return threads
+        return list_all_codex_threads()
 
     def _codex_statuses(self, refs: list[dict[str, str]]) -> list[dict[str, Any]]:
         return codex_statuses(refs)
@@ -1499,6 +2012,31 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
             self._codex_work_log(parsed)
             return
 
+        if parsed.path == "/api/task-sync":
+            try:
+                state = get_business_store().snapshot()["data"][TASK_SYNC]
+                reconcile_task_sync_runs(state)
+                all_threads = self._list_codex_threads()
+                manager_threads = [
+                    thread
+                    for thread in all_threads
+                    if thread.get("hostId") == "local"
+                ]
+                self._json_response(
+                    {
+                        "available": True,
+                        "state": state,
+                        "managerThreads": manager_threads,
+                        "sourceThreads": all_threads,
+                    }
+                )
+            except Exception as error:
+                self._json_response(
+                    {"available": False, "error": str(error), "managerThreads": []},
+                    503,
+                )
+            return
+
         if parsed.path == "/api/feishu/status":
             self._json_response(get_feishu_notifier().status())
             return
@@ -1540,6 +2078,60 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
                 self._json_response({"available": False, "error": str(error)}, 400)
             except Exception as error:
                 self._json_response({"available": False, "error": str(error)}, 500)
+            return
+        if parsed.path in {
+            "/api/task-sync/analyze",
+            "/api/task-sync/submit",
+            "/api/task-sync/settings",
+        }:
+            try:
+                body = self._json_request(max_bytes=2 * 1024 * 1024)
+                if parsed.path.endswith("/settings"):
+                    source_refs = body.get("sourceThreadRefs")
+                    if source_refs is not None and not isinstance(source_refs, list):
+                        raise ValueError("来源对话选择无效")
+                    manager_thread_id = body.get("managerThreadId")
+                    if manager_thread_id is not None and not isinstance(
+                        manager_thread_id, str
+                    ):
+                        raise ValueError("统管对话无效")
+                    if source_refs is None and manager_thread_id is None:
+                        raise ValueError("没有需要保存的设置")
+                    state = save_task_sync_settings(
+                        [str(value) for value in source_refs]
+                        if source_refs is not None
+                        else None,
+                        manager_thread_id,
+                    )
+                    self._json_response({"available": True, "state": state})
+                elif parsed.path.endswith("/analyze"):
+                    since = body.get("since")
+                    since_ms = int(since) if isinstance(since, (int, float)) else None
+                    source_refs = body.get("sourceThreadRefs")
+                    if source_refs is not None and not isinstance(source_refs, list):
+                        raise ValueError("来源对话选择无效")
+                    run = start_task_sync_analysis(
+                        str(body.get("managerThreadId") or ""),
+                        since_ms,
+                        [str(value) for value in source_refs] if source_refs is not None else None,
+                    )
+                    self._json_response({"available": True, "run": run}, 202)
+                else:
+                    analysis = body.get("analysis")
+                    if not isinstance(analysis, dict):
+                        raise ValueError("审核结果无效")
+                    run = submit_task_sync_decision(
+                        str(body.get("runId") or ""), analysis
+                    )
+                    self._json_response({"available": True, "run": run}, 202)
+            except StateConflict as error:
+                self._json_response({"available": False, "error": str(error)}, 409)
+            except PermissionError as error:
+                self._json_response({"available": False, "error": str(error)}, 403)
+            except (ValueError, TypeError) as error:
+                self._json_response({"available": False, "error": str(error)}, 400)
+            except Exception as error:
+                self._json_response({"available": False, "error": str(error)}, 503)
             return
         if not parsed.path.startswith("/api/feishu/"):
             self._json_response({"available": False, "error": "接口不存在"}, 404)

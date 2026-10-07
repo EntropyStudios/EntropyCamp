@@ -61,6 +61,7 @@ python3 run.py          # 或双击 启动提醒卡片.sh
 - 历史日历记录班次、工作时长、完成次数、心情与备注，支持按班次时间范围补选历史对话
 - 多剪贴板页保存多条 TXT 原文或 Markdown，支持阅读 / 源码双模式、搜索、格式筛选、复制、编辑、置顶和删除
 - 主页提供紧凑待办条，可快速添加和直接完成；独立待办页分为未完成与历史，支持优先级、截止时间、备注、排序、恢复与删除
+- 任务同步页按“上次点击至本次点击”的窗口冻结全部 Codex 对话，交给指定统管对话分析；Linear 更新、新任务和飞书建议必须在页面人工勾选、编辑并再次提交，网页不直接修改外部系统
 - 页面使用实时事件连接（SSE），并在重新聚焦时补查；60 秒低频同步防止休眠漏报
 - 飞书通知：提醒到期、Codex 完成、上下班等事件，带签名、持久化 outbox 与去重
 - iPhone Scriptable 小组件显示上班状态、工作时长、完成次数和前四项提醒
@@ -105,6 +106,7 @@ python3 run.py          # 或双击 启动提醒卡片.sh
 | `history.*`, `work-history-core.js` | 班次日历、工作时长 / 次数、心情备注、补选对话归档 |
 | `clipboard.*`, `clipboard-core.js` | 多剪贴板 TXT / MD，含 Markdown 表格渲染 |
 | `todo.*`, `todo-core.js` | 今日待办条、独立待办页、分类 / 优先级 / 截止时间与排序 |
+| `task-sync.*`, `task_sync.py` | Codex 增量对话归档、任务同步分析、人工审核与执行回传 |
 | `widget_service.py`, `scriptable/*`, `scripts/*widget*` | iPhone 只读摘要、Scriptable 与令牌脚本 |
 | `test_run.py` | unittest，部分测试通过 Node 执行 JS |
 

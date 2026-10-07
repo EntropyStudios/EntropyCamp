@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from state_store import BusinessStateStore, StateConflict, DEFAULTS, CARDS, SESSION, HISTORY, CLIPBOARD, TODOS
+from state_store import BusinessStateStore, StateConflict, DEFAULTS, CARDS, SESSION, HISTORY, CLIPBOARD, TODOS, TASK_SYNC
 
 
 class BusinessStateTests(unittest.TestCase):
@@ -31,6 +31,17 @@ class BusinessStateTests(unittest.TestCase):
         reopened.update({TODOS: {"base": base, "value": value}})
         persisted = BusinessStateStore(self.store.directory).snapshot()["data"][TODOS]
         self.assertEqual(persisted["items"][0]["title"], "测试")
+
+    def test_task_sync_document_can_be_mutated_atomically(self):
+        def add_run(document):
+            document["lastTriggeredAt"] = 42
+            document["runs"] = [{"id": "sync-1", "status": "review"}]
+            return document
+
+        result = self.store.mutate(TASK_SYNC, add_run)
+        saved = result["data"][TASK_SYNC]
+        self.assertEqual(saved["lastTriggeredAt"], 42)
+        self.assertEqual(saved["runs"][0]["status"], "review")
 
     def test_non_conflicting_edits_from_stale_clients_merge(self):
         base = self.store.snapshot()["data"][CARDS]
