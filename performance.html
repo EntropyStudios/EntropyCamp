@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#000000">
+  <title>运控任务 · EntropyCamp</title>
+  <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="performance.css">
+</head>
+<body>
+<div class="page performance-page">
+  <header class="performance-topbar">
+    <div><span class="eyebrow">TEAM WORKSPACE</span><h1>运控任务 <small>飞书任务看板</small></h1></div>
+    <nav><a class="work-button link-button" href="./">返回提醒</a><button class="work-button" id="settingsButton">连接设置</button><button class="new-button" id="refreshButton">刷新任务</button></nav>
+  </header>
+  <main>
+    <form id="filters" class="filter-panel">
+      <div class="filter-heading"><div><span class="eyebrow">FILTERS</span><h2>找到需要关注的任务</h2></div><span id="filterSummary">按条件查询 · 连续浏览全部结果</span></div>
+      <div class="filter-grid">
+        <label class="keyword"><span>关键词</span><input name="q" type="search" placeholder="搜索工作内容、备注、验收标准…"></label>
+        <label><span>部门（精确匹配）</span><input name="department" value="运控" placeholder="全部部门"></label>
+        <label><span>工作状态</span><select name="status"><option value="">全部状态</option></select></label>
+        <label><span>负责人</span><select name="person_id"><option value="">全部人员</option></select></label>
+        <label><span>截止日期从（含当天）</span><input type="date" name="due_from"></label>
+        <label><span>截止日期至（含当天）</span><input type="date" name="due_to"></label>
+      </div>
+      <details id="advanced"><summary>更多筛选与排序 <span>归档 · 姓名 · 排序</span></summary><div class="filter-grid advanced-grid">
+        <label><span>人员姓名包含</span><input name="person_name" placeholder="输入姓名片段"></label>
+        <label><span>归档范围</span><select name="archived"><option value="exclude">不含已归档</option><option value="include">全部记录</option><option value="only">仅已归档</option></select></label>
+        <label><span>排序字段</span><select name="sort_by"><option value="fld9RMSxRx">截止日期</option><option value="fldN5vxh56">最后更改时间</option><option value="fldnzKrRdr">创建时间</option></select></label>
+        <label><span>顺序</span><select name="descending"><option value="false">升序 · 较早在前</option><option value="true">降序 · 较晚在前</option></select></label>
+      </div></details>
+      <div class="filter-footer"><div class="date-shortcuts"><button type="button" data-days="0">今天起</button><button type="button" data-days="7">未来 7 天</button><button type="button" data-days="30">未来 30 天</button><button type="button" id="clearDates">不限日期</button></div><div><button class="work-button" type="button" id="resetButton">重置</button><button class="new-button" type="submit">应用筛选</button></div></div>
+    </form>
+    <div class="list-toolbar"><div><strong id="totalCount">—</strong><span> 条符合条件的任务</span></div><span id="syncStatus" role="status">等待连接</span></div>
+    <div class="notice" id="errorNotice" role="alert" hidden></div>
+    <section id="taskList" class="task-list" aria-label="运控任务列表" aria-busy="false"></section>
+    <div class="empty" id="emptyState" hidden><strong>没有符合条件的任务</strong><span>试试放宽日期范围、状态或部门条件。</span></div>
+    <footer class="pagination"><span id="pageLabel">全部结果在此页连续展示</span></footer>
+  </main>
+</div>
+<dialog id="settingsDialog" aria-labelledby="settingsTitle"><form id="settingsForm">
+  <div class="dialog-head"><div><span class="eyebrow">CONNECTION</span><h2 id="settingsTitle">连接任务服务</h2></div><button type="button" class="close-icon" data-close="settingsDialog" aria-label="关闭">×</button></div>
+  <label><span>接口地址</span><input id="baseUrl" type="url" required value="http://192.168.100.247:8765"></label>
+  <label><span>只读密钥</span><input id="apiToken" type="password" autocomplete="new-password" placeholder="填写只读密钥；留空保留现有配置"></label>
+  <p>密钥保存在本机私有配置中。更换服务地址时需重新填写密钥。</p>
+  <p id="connectionStatus" role="status"></p>
+  <div class="dialog-actions"><button class="work-button" type="button" data-close="settingsDialog">取消</button><button class="new-button" type="submit" id="saveConnection">保存并测试连接</button></div>
+</form></dialog>
+<dialog id="detailDialog" class="detail-dialog" aria-labelledby="detailTitle"><div class="dialog-head"><div><span class="eyebrow">TASK DETAILS</span><h2 id="detailTitle">任务详情</h2></div><button class="close-icon" data-close="detailDialog" aria-label="关闭">×</button></div><div id="detailContent"></div></dialog>
+<script src="performance.js"></script>
+</body></html>

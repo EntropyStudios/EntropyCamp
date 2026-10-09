@@ -111,3 +111,7 @@
 .toast.is-visible { opacity:1; transform:translateY(0); }
 @media(max-width:1100px){.source-thread-list{grid-template-columns:repeat(2,minmax(0,1fr))}.sync-workspace{grid-template-columns:240px minmax(0,1fr)}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:1ms!important;animation-iteration-count:1!important;transition-duration:1ms!important}}
+/* Manual conversation handoff, using the existing secondary button style. */
+.request-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0; }
+#requestText { width: 100%; font-family: inherit; line-height: 1.6; }
+#requestPanel[hidden], #copyExecutionRequest[hidden] { display: none; }

@@ -23,7 +23,7 @@
           <div class="sync-control-head">
             <div><span>NEW SYNC</span><h2 id="syncControlTitle">开始一次同步</h2><p id="windowDescription">正在读取上次同步时间…</p></div>
             <button class="new-button sync-analyze-button" id="analyzeButton" type="button">
-              <svg aria-hidden="true"><use href="#icon-spark"></use></svg><span>分析新增对话</span>
+              <svg aria-hidden="true"><use href="#icon-spark"></use></svg><span>生成分析请求</span>
             </button>
           </div>
           <div class="sync-target-row">
@@ -73,6 +73,11 @@
                 <span class="status-badge" id="runStatus"></span>
               </div>
               <div class="error-box" id="runError" hidden></div>
+              <div class="request-actions">
+                <button class="secondary-button" id="copyAnalysisRequest" type="button">复制分析请求</button>
+                <button class="secondary-button" id="copyExecutionRequest" type="button" hidden>复制执行请求</button>
+              </div>
+              <label class="summary-field" id="requestPanel" hidden><span>复制后粘贴到“架构师-sevenova”对话</span><textarea id="requestText" rows="6" readonly></textarea></label>
               <div class="waiting-box" id="waitingBox" hidden><span class="waiting-indicator" aria-hidden="true"></span><span id="waitingText"></span></div>
               <form id="reviewForm" hidden>
                 <label class="summary-field"><span>本次判断</span><textarea id="analysisSummary" rows="3"></textarea></label>
@@ -93,8 +98,8 @@
                   <div class="section-heading"><div><span>IGNORED</span><h3>本次忽略</h3></div></div><div id="ignoredItems"></div>
                 </section>
                 <div class="submit-bar">
-                  <p>只有提交确认后，选择结果才会发回统管对话。</p>
-                  <button class="new-button" id="submitDecisionButton" type="submit"><svg aria-hidden="true"><use href="#icon-send"></use></svg><span>提交确认结果</span></button>
+                  <p>保存选择后，复制执行请求并粘贴到统管对话。</p>
+                  <button class="new-button" id="submitDecisionButton" type="submit"><svg aria-hidden="true"><use href="#icon-send"></use></svg><span>保存确认并复制请求</span></button>
                 </div>
               </form>
               <section class="execution-result" id="executionResult" hidden>

@@ -112,7 +112,7 @@ def normalize_analysis(value: Any) -> dict[str, Any]:
                 continue
             row = dict(raw)
             signature = str(row.get("issueId") or row.get("title") or index)
-            row["id"] = _stable_id(kind, index, signature)
+            row["id"] = str(row.get("id") or _stable_id(kind, index, signature))
             row["selected"] = (
                 bool(row.get("selected"))
                 if "selected" in row

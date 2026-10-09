@@ -2,9 +2,10 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import run
+from state_store import BusinessStateStore, TASK_SYNC, StateConflict
 from task_sync import (
     analysis_prompt,
     decision_prompt,
@@ -97,6 +98,60 @@ class TaskSyncHelpersTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "正在处理"):
             bridge.start_turn("thread-1", "分析")
         bridge.request.assert_not_called()
+
+
+class ManualTaskSyncTest(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.store = BusinessStateStore(Path(self.temp.name))
+        self.store.initialize({})
+        self.store_patch = patch.object(run, "BUSINESS_STORE", self.store)
+        self.store_patch.start()
+        self.addCleanup(self.store_patch.stop)
+        self.payload = {"summary": "已分析", "linearUpdates": [], "newLinearTasks": [], "feishuTasks": [], "ignored": []}
+
+    def create_run(self):
+        threads = [{"id": "manager", "hostId": "local", "name": "统管"}]
+        logs = [{"id": "source", "turns": [{"id": "turn-1"}]}]
+        with patch.object(run, "list_all_codex_threads", return_value=threads), patch.object(
+            run, "_read_task_sync_window", return_value=logs
+        ), patch.object(run.CODEX_BRIDGE, "start_turn", side_effect=AssertionError("不应自动发消息")):
+            return run.start_task_sync_analysis("manager", 1)
+
+    def test_manual_full_cycle_and_repeated_receipt_rejected(self):
+        batch = self.create_run()
+        self.assertEqual(batch["status"], "awaiting_analysis")
+        detail = run.task_sync_detail(batch["id"])
+        self.assertEqual(detail["bundle"]["threads"][0]["id"], "source")
+        self.assertIn("/result", run.task_sync_request(batch["id"], "analysis")["prompt"])
+        reviewed = run.save_task_sync_result({"runId": batch["id"], "phase": "analysis", "expectedRevision": 1, "analysis": self.payload})
+        with patch.object(run.CODEX_BRIDGE, "start_turn", side_effect=AssertionError("不应自动发消息")):
+            confirmed = run.submit_task_sync_decision(batch["id"], reviewed["analysis"], 2)
+        self.assertEqual(confirmed["status"], "awaiting_execution")
+        self.assertIn("executionHistory", run.task_sync_request(batch["id"], "execution")["prompt"])
+        body = {"runId": batch["id"], "phase": "execution", "expectedRevision": 3, "decisionRevision": 1, "result": "已完成，无外部写入"}
+        completed = run.save_task_sync_result(body)
+        self.assertEqual(completed["status"], "completed")
+        self.assertEqual(len(completed["executionHistory"]), 1)
+        with self.assertRaises(StateConflict):
+            run.save_task_sync_result(body)
+
+    def test_failed_legacy_batch_reuses_original_bundle(self):
+        batch = self.create_run()
+        run._update_task_sync_run(batch["id"], lambda value: {**value, "status": "failed", "error": "thread not found"})
+        prompt = run.task_sync_request(batch["id"], "analysis")["prompt"]
+        self.assertIn(batch["id"], prompt)
+        reviewed = run.save_task_sync_result({"runId": batch["id"], "phase": "analysis", "expectedRevision": 1, "analysis": self.payload})
+        self.assertEqual(reviewed["error"], "")
+        self.assertEqual(reviewed["bundlePath"], batch["bundlePath"])
+
+    def test_stale_decision_does_not_replace_review(self):
+        batch = self.create_run()
+        run.save_task_sync_result({"runId": batch["id"], "phase": "analysis", "expectedRevision": 1, "analysis": self.payload})
+        with self.assertRaises(StateConflict):
+            run.submit_task_sync_decision(batch["id"], self.payload, 1)
+        self.assertEqual(run.task_sync_detail(batch["id"])["run"]["status"], "review")
 
 
 if __name__ == "__main__":

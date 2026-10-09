@@ -30,23 +30,32 @@
   const sourceThreadList = document.querySelector("#sourceThreadList");
   const sourceSelectionSummary = document.querySelector("#sourceSelectionSummary");
   const toggleSourcesButton = document.querySelector("#toggleSourcesButton");
+  const copyAnalysisRequest = document.querySelector("#copyAnalysisRequest");
+  const copyExecutionRequest = document.querySelector("#copyExecutionRequest");
+  const requestPanel = document.querySelector("#requestPanel");
+  const requestText = document.querySelector("#requestText");
 
   let state = null;
   let managerThreads = [];
   let sourceThreads = [];
   let selectedSourceRefs = new Set();
   let sourcesInitialized = false;
-  let activeRunId = "";
+  let activeRunId = sessionStorage.getItem("task-sync-active-run") || "";
   let loading = false;
   let pollTimer = 0;
   let toastTimer = 0;
   let selectionSaveTimer = 0;
+  let draftDirty = false;
+  let draftRunId = "";
+  let draftRevision = 0;
 
   const statusLabels = {
+    awaiting_analysis: "等待粘贴分析请求",
+    awaiting_execution: "等待粘贴执行请求",
     analyzing: "分析中",
     review: "待审核",
     executing: "执行中",
-    completed: "已提交",
+    completed: "已回写结果",
     failed: "失败",
   };
 
@@ -107,6 +116,7 @@
 
   function managerThread() {
     return managerThreads.find((thread) => thread.id === state?.managerThreadId)
+      || (state?.managerThreadId ? {id: state.managerThreadId, name: state.managerThreadName} : null)
       || managerThreads[0]
       || null;
   }
@@ -231,6 +241,9 @@
   }
 
   function renderAnalysis(run) {
+    if (draftDirty && draftRunId === run.id) return;
+    draftRunId = run.id;
+    draftRevision = Number(run.revision || 0);
     const analysis = run.analysis || {};
     analysisSummary.value = analysis.summary || "";
     renderRows(linearUpdates, analysis.linearUpdates || [], "linearUpdates");
@@ -259,15 +272,17 @@
     runError.textContent = run.error || "";
     const waiting = run.status === "analyzing" || run.status === "executing";
     waitingBox.hidden = !waiting;
-    waitingText.textContent = run.status === "analyzing"
+    waitingText.textContent = run.progressMessage || (run.status === "analyzing"
       ? "Codex 正在分析新增对话，完成后这里会自动出现审核项。"
-      : "确认结果已发给统管对话，正在等待实际执行结果。";
+      : "请复制请求到统管对话，处理进度和结果会通过接口回写。");
+    waitingBox.hidden = !waiting && !["awaiting_analysis", "awaiting_execution"].includes(run.status);
+    copyExecutionRequest.hidden = run.status !== "awaiting_execution";
     reviewForm.hidden = !run.analysis || waiting;
     executionResult.hidden = !run.executionResult;
     executionResultText.textContent = run.executionResult || "";
     if (run.analysis && !waiting) {
       renderAnalysis(run);
-      submitDecisionButton.textContent = run.status === "completed" ? "提交修订结果" : "提交确认结果";
+      submitDecisionButton.querySelector("span").textContent = run.status === "completed" ? "保存修订并复制请求" : "保存确认并复制请求";
     }
   }
 
@@ -279,28 +294,34 @@
     renderReview();
     const busy = (state?.runs || []).some((run) => ["analyzing", "executing"].includes(run.status));
     analyzeButton.disabled = loading || busy || !managerThread() || selectedSourceRefs.size === 0;
-    schedulePoll(busy);
+    schedulePoll((state?.runs || []).some((run) => ["awaiting_analysis", "awaiting_execution", "analyzing", "executing", "failed"].includes(run.status)));
   }
 
   async function loadState({ quiet = false } = {}) {
     try {
-      const result = await request("/api/task-sync");
+      const result = await request("/api/task-sync?stateOnly=1");
       state = result.state;
-      managerThreads = result.managerThreads || [];
-      sourceThreads = (result.sourceThreads || result.managerThreads || []).sort((left, right) =>
-        Number(right.updatedAt || 0) - Number(left.updatedAt || 0)
-      );
-      if (!sourcesInitialized) {
-        const available = new Set(sourceThreads.map(sourceRef));
-        selectedSourceRefs = Array.isArray(state.selectedSourceRefs)
-          ? new Set(state.selectedSourceRefs.filter((ref) => available.has(ref)))
-          : new Set(available);
-        sourcesInitialized = true;
-      }
-      if (!activeRunId && state.runs?.length) activeRunId = state.runs[0].id;
-      render();
+      if (!state.runs?.some((run) => run.id === activeRunId)) activeRunId = state.runs?.[0]?.id || "";
+      sessionStorage.setItem("task-sync-active-run", activeRunId);
+      const editing = reviewForm.contains(document.activeElement);
+      if (!editing) render();
     } catch (error) {
       if (!quiet) showToast(error.message || "读取失败");
+    }
+  }
+
+  async function loadSources() {
+    try {
+      const result = await request("/api/codex/threads");
+      sourceThreads = (result.threads || []).sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+      managerThreads = sourceThreads.filter((thread) => thread.hostId === "local");
+      if (!sourcesInitialized) {
+        selectedSourceRefs = new Set(Array.isArray(state?.selectedSourceRefs) ? state.selectedSourceRefs : sourceThreads.map(sourceRef));
+        sourcesInitialized = true;
+      }
+      render();
+    } catch (error) {
+      sourceSelectionSummary.textContent = "来源列表加载失败，已保存结果仍可审核；点击刷新重试";
     }
   }
 
@@ -332,7 +353,7 @@
     loading = true;
     analyzeButton.disabled = true;
     analyzeButton.classList.add("is-loading");
-    analyzeButton.querySelector("span").textContent = "正在启动…";
+    analyzeButton.querySelector("span").textContent = "正在收集…";
     try {
       const result = await request("/api/task-sync/analyze", {
         managerThreadId: manager.id,
@@ -340,14 +361,15 @@
         since,
       });
       activeRunId = result.run.id;
-      showToast("已将增量对话发送给统管对话分析");
+      sessionStorage.setItem("task-sync-active-run", activeRunId);
       await loadState({ quiet: true });
+      await copyRequest("analysis");
     } catch (error) {
       showToast(error.message || "分析启动失败");
     } finally {
       loading = false;
       analyzeButton.classList.remove("is-loading");
-      analyzeButton.querySelector("span").textContent = "分析新增对话";
+      analyzeButton.querySelector("span").textContent = "生成分析请求";
       render();
     }
   }
@@ -390,9 +412,11 @@
       await request("/api/task-sync/submit", {
         runId: run.id,
         analysis: serializeAnalysis(run),
+        expectedRevision: draftRevision,
       });
-      showToast("确认结果已发送给统管对话");
+      draftDirty = false;
       await loadState({ quiet: true });
+      await copyRequest("execution");
     } catch (error) {
       showToast(error.message || "提交失败");
     } finally {
@@ -400,10 +424,34 @@
     }
   }
 
+  async function copyRequest(phase) {
+    const run = currentRun();
+    if (!run) return;
+    try {
+      const result = await request(`/api/task-sync/request?id=${encodeURIComponent(run.id)}&phase=${phase}`);
+      requestText.value = result.prompt;
+      requestPanel.hidden = false;
+      try {
+        await navigator.clipboard.writeText(result.prompt);
+        showToast("请求已复制，请粘贴到架构师-sevenova对话");
+      } catch {
+        requestText.focus();
+        requestText.select();
+        showToast("请求已生成，请手动复制下方文本");
+      }
+    } catch (error) { showToast(error.message); }
+  }
+
+  copyAnalysisRequest.addEventListener("click", () => copyRequest("analysis"));
+  copyExecutionRequest.addEventListener("click", () => copyRequest("execution"));
+
   runList.addEventListener("click", (event) => {
     const button = event.target.closest("[data-run-id]");
     if (!button) return;
     activeRunId = button.dataset.runId;
+    sessionStorage.setItem("task-sync-active-run", activeRunId);
+    draftDirty = false;
+    requestPanel.hidden = true;
     render();
   });
   sourceSearch.addEventListener("input", renderSourceThreads);
@@ -426,11 +474,12 @@
     render();
   });
   analyzeButton.addEventListener("click", startAnalysis);
-  refreshButton.addEventListener("click", () => loadState());
+  refreshButton.addEventListener("click", async () => { await loadState(); loadSources(); });
   reviewForm.addEventListener("submit", submitDecision);
+  reviewForm.addEventListener("input", () => { draftDirty = true; });
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) loadState({ quiet: true });
   });
 
-  loadState();
+  loadState().then(loadSources);
 })();
