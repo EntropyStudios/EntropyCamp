@@ -187,6 +187,7 @@
       }
       if (block.type === "list") {
         const list = document.createElement(block.ordered ? "ol" : "ul");
+        if (block.ordered && Number.isSafeInteger(block.start)) list.start = block.start;
         block.items.forEach((tokens) => {
           const item = document.createElement("li");
           appendInlineTokens(item, tokens);
