@@ -364,14 +364,22 @@
       const listMatch = line.match(/^\s{0,3}([-+*]|\d+[.)])\s+(.+)$/);
       if (listMatch) {
         const ordered = /^\d/.test(listMatch[1]);
+        const start = ordered ? Number.parseInt(listMatch[1], 10) : undefined;
         const items = [];
         while (index < lines.length) {
+          if (!lines[index].trim()) {
+            let next = index;
+            while (next < lines.length && !lines[next].trim()) next += 1;
+            const following = lines[next]?.match(/^\s{0,3}([-+*]|\d+[.)])\s+(.+)$/);
+            if (!following || /^\d/.test(following[1]) !== ordered) break;
+            index = next;
+          }
           const item = lines[index].match(/^\s{0,3}([-+*]|\d+[.)])\s+(.+)$/);
           if (!item || /^\d/.test(item[1]) !== ordered) break;
           items.push(parseInline(item[2]));
           index += 1;
         }
-        blocks.push({ type: "list", ordered, items });
+        blocks.push({ type: "list", ordered, ...(ordered ? { start } : {}), items });
         continue;
       }
 

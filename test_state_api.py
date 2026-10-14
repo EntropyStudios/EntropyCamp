@@ -12,6 +12,12 @@ from state_store import BusinessStateStore, CARDS, SESSION, HISTORY, DEFAULTS
 
 
 class StateAPITests(unittest.TestCase):
+    def test_sync_saved_results_do_not_wait_for_codex_thread_scan(self):
+        with mock.patch.object(run.ReminderHandler, "_list_codex_threads", side_effect=RuntimeError("SSH列表不可用")):
+            result = self.request("/api/task-sync?stateOnly=1")
+        self.assertTrue(result["available"])
+        self.assertIn("runs", result["state"])
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.store = BusinessStateStore(Path(self.temporary.name))
@@ -60,3 +66,23 @@ class StateAPITests(unittest.TestCase):
                                                HISTORY: {"base": first[HISTORY], "value": history}}})
         self.assertEqual(result["data"][SESSION]["endedAt"], 20)
         self.assertEqual(result["data"][HISTORY]["entries"][0]["id"], "shift")
+
+    def test_manual_sync_http_roundtrip_and_stale_write(self):
+        self.store.initialize({})
+        with mock.patch.object(run, "list_all_codex_threads", return_value=[{"id": "manager", "hostId": "local"}]), mock.patch.object(
+            run, "_read_task_sync_window", return_value=[{"id": "source", "turns": [{"id": "one"}]}]
+        ), mock.patch.object(run.CODEX_BRIDGE, "start_turn", side_effect=AssertionError("不得自动发送")):
+            batch = self.request("/api/task-sync/analyze", {"managerThreadId": "manager", "since": 1})["run"]
+            run_id = batch["id"]
+            detail = self.request(f"/api/task-sync/run?id={run_id}")
+            self.assertEqual(detail["bundle"]["threads"][0]["id"], "source")
+            self.assertIn("expectedRevision", self.request(f"/api/task-sync/request?id={run_id}")["prompt"])
+            body = {"runId": run_id, "phase": "analysis", "expectedRevision": 1,
+                    "analysis": {"summary": "可审核", "linearUpdates": [], "newLinearTasks": [], "feishuTasks": [], "ignored": []}}
+            self.assertEqual(self.request("/api/task-sync/result", body)["run"]["status"], "review")
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                self.request("/api/task-sync/result", body)
+            self.assertEqual(caught.exception.code, 409)
+            with self.assertRaises(urllib.error.HTTPError) as caught:
+                self.request("/api/task-sync/result", {**body, "expectedRevision": 2}, {"Content-Type": "application/json"})
+            self.assertEqual(caught.exception.code, 403)
