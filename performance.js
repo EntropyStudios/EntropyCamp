@@ -39,15 +39,14 @@
       const due = field(record, ids.due, "截止日期");
       const completed = /完成|结束|验收通过/.test(status);
       const overdue = due && Number(due) < new Date(`${today()}T00:00:00+08:00`).getTime() && !completed;
-      const content = `<div class="task-card-head"><span class="badge ${completed ? "finished" : overdue ? "overdue" : ""}">${esc(status === "—" ? "未设状态" : status)}</span><span>${esc(text(field(record, ids.department, "部门")))}</span></div><h3>${esc(text(field(record, ids.title, "工作内容")))}</h3><div class="task-card-foot"><span>${esc(text(field(record, ids.people, "姓名 (人员 )")))}</span><time>${overdue ? "已逾期 · " : "截止 "}${esc(date(due))}</time></div>`;
+      const content = `<td><button type="button" class="task-title-button">${esc(text(field(record, ids.title, "工作内容")))}</button></td><td class="task-people">${esc(text(field(record, ids.people, "姓名 (人员 )")))}</td><td><span class="badge ${completed ? "finished" : overdue ? "overdue" : ""}">${esc(status === "—" ? "未设状态" : status)}</span></td><td class="task-date ${overdue ? "is-overdue" : ""}"><time>${esc(date(due))}</time>${overdue ? '<small>已逾期</small>' : ''}</td><td class="task-department">${esc(text(field(record, ids.department, "部门")))}</td>`;
       let node = existing.get(record.record_id);
       if (!node) {
-        node = document.createElement("button");
-        node.type = "button";
-        node.className = "task-card";
+        node = document.createElement("tr");
+        node.className = "task-row";
         node.dataset.record = record.record_id;
       }
-      // Keep the same card element, focus and hover state across background polls.
+      // Keep the same row element, focus and hover state across background polls.
       if (node._renderedContent !== content) {
         node.innerHTML = content;
         node._renderedContent = content;
