@@ -81,14 +81,26 @@
               <div class="waiting-box" id="waitingBox" hidden><span class="waiting-indicator" aria-hidden="true"></span><span id="waitingText"></span></div>
               <form id="reviewForm" hidden>
                 <label class="summary-field"><span>本次判断</span><textarea id="analysisSummary" rows="3"></textarea></label>
+                <section class="result-section" id="questionsSection" hidden>
+                  <div class="section-heading"><div><span>QUESTIONS</span><h3>待确认问题</h3><p>可以回答、选择建议答案，或忽略；忽略不代表同意。</p></div><span class="count-pill" id="questionCount">0</span></div>
+                  <div id="questionItems" class="result-list"></div>
+                </section>
 
                 <section class="result-section">
-                  <div class="section-heading"><div><span>EXISTING ISSUES</span><h3>更新已有 Linear</h3><p>勾选需要交由统管对话更新的条目。</p></div><span class="count-pill" id="linearUpdateCount">0</span></div>
+                  <div class="section-heading"><div><span>PARENT TASK PROPOSALS</span><h3>父任务提议（先讨论，不直接发布）</h3><p>已有父TASK范围内的工作应建推进子Issue；确属新目标再复制到统管对话确认。</p></div><span class="count-pill" id="parentTaskCount">0</span></div>
+                  <div id="parentTaskRequests"></div>
+                </section>
+                <section class="result-section">
+                  <div class="section-heading"><div><span>EXISTING CHILD ISSUES</span><h3>更新已有推进子Issue</h3><p>过程写子Issue；合同变更单独确认，不能混入普通进展。</p></div><span class="count-pill" id="linearUpdateCount">0</span></div>
                   <div id="linearUpdates"></div>
                 </section>
                 <section class="result-section">
-                  <div class="section-heading"><div><span>NEW ISSUES</span><h3>新建 Linear</h3><p>确认标题、归属和验收内容。</p></div><span class="count-pill" id="newLinearCount">0</span></div>
+                  <div class="section-heading"><div><span>CHILD ISSUES</span><h3>新建推进子Issue</h3><p>必须有已确认父TASK及合同覆盖依据，不按标题相似挂靠。</p></div><span class="count-pill" id="newLinearCount">0</span></div>
                   <div id="newLinearTasks"></div>
+                </section>
+                <section class="result-section">
+                  <div class="section-heading"><div><span>PARENT TASK ACCEPTANCE</span><h3>父TASK申请验收建议</h3><p>列出对应子Issue和整体证据；不会自动评分或设置父TASK Done。</p></div><span class="count-pill" id="acceptanceCount">0</span></div>
+                  <div id="acceptanceRequests"></div>
                 </section>
                 <section class="result-section">
                   <div class="section-heading"><div><span>FEISHU DRAFTS</span><h3>飞书任务建议</h3><p>保留为可复制建议，不直接写入飞书。</p></div><span class="count-pill" id="feishuCount">0</span></div>
