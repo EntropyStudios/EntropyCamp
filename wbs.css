@@ -198,3 +198,16 @@
 .hierarchy button.issue-title,.network button.issue-title { min-height:0; height:47px; padding:6px 0; font-size:12px; line-height:1.5; }
 .hierarchy .wbs-card footer,.network .wbs-card footer { margin-top:auto; padding-top:5px; }
 .hierarchy .task-signals,.network .task-signals { margin-top:6px; }
+
+/* Ownership is a fixed side rail; status is a labelled chip, title leads. */
+.wbs-card { border-left:1px solid #ffffff20; background:linear-gradient(145deg,#ffffff09,transparent 80%),#11151b; }
+.wbs-card::before { display:none; }
+.task-owner-marker { position:absolute; left:0; top:0; bottom:0; width:7px; border-radius:7px 0 0 7px; background:var(--task-owner); }
+.task-owner-marker.is-unassigned { background:repeating-linear-gradient(0deg,#8b929c 0 7px,#252a32 7px 13px); }
+.wbs-card .card-head { padding-left:3px; justify-content:flex-start; gap:8px; }
+.task-state-signal { min-height:24px; padding:3px 6px; font-size:11px; margin-left:auto; border-radius:4px; }
+.task-deadline { display:none; }
+.wbs-body button.issue-title { font-size:17px; font-weight:700; line-height:1.55; min-height:95px; padding:12px 0 12px 3px; }
+.hierarchy button.issue-title,.network button.issue-title { height:91px; min-height:91px; padding:9px 0 7px 4px; font-size:17px; font-weight:700; line-height:1.45; -webkit-line-clamp:3; }
+.owner-key .owner-avatar { width:13px; height:13px; border-radius:3px; background:var(--owner); color:transparent; font-size:0; }
+.owner-key .owner-badge { color:#c5cbd5; font-size:11px; }

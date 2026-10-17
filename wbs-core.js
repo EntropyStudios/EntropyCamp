@@ -35,11 +35,11 @@
       edges:issues.flatMap(i=>[...incoming.get(i.id)].map(from=>({from,to:i.id}))) };
   }
   function ownerStyle(name){
-    const known={'李昊洋':['#72b9ed','昊洋'],'文子轩':['#c4a0ed','子轩'],'张泽临':['#e9ba75','泽临'],'蒋梓欣':['#83c9ac','梓欣']};
+    const known={'李昊洋':['#c084fc','昊洋'],'文子轩':['#f472b6','子轩'],'张泽临':['#e8ecf5','泽临'],'蒋梓欣':['#e35b78','梓欣']};
     if(!name)return {color:'#9ca3af',initials:'?',name:'待接取',unassigned:true};
     if(known[name])return {color:known[name][0],initials:known[name][1],name,unassigned:false};
     let h=0;for(const ch of name)h=(h*31+ch.charCodeAt(0))>>>0;
-    return {color:['#a9b8dd','#d5a8b4','#b5c384','#8ec8ca'][h%4],initials:name.slice(-2),name,unassigned:false};
+    return {color:['#a78bfa','#ed94d5','#d66585','#d8c2f0'][h%4],initials:name.slice(-2),name,unassigned:false};
   }
   // Hierarchy edges express ownership only, never execution dependencies.
   function hierarchyLayout(tree){
