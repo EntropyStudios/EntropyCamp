@@ -184,3 +184,17 @@
 .wbs-card .owner-badge.unassigned { border:1px dashed #db9c7470; background:#db9c7410; color:#ecbb9e; }
 .hierarchy-group.project { border-color:#8acbb6; box-shadow:0 0 32px #82c2a319; }
 @media(max-width:1100px) { .workspace-context { grid-template-columns:minmax(260px,1.4fr) minmax(220px,1fr); } }
+
+/* Primary task signals remain legible when the graph is scaled down. */
+.task-signals { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:7px; margin-top:9px; }
+.task-owner-signal,.task-state-signal { display:flex; min-height:35px; align-items:center; justify-content:center; padding:5px 10px; border-radius:5px; font-size:17px; font-weight:800; line-height:1.25; white-space:nowrap; }
+.task-owner-signal { overflow:hidden; text-overflow:ellipsis; background:var(--task-owner); color:#0b1420; }
+.task-owner-signal.is-unassigned { background:repeating-linear-gradient(135deg,#6c492c,#6c492c 7px,#503720 7px,#503720 14px); border:1px dashed #ffc18a; color:#ffe2bb; }
+.task-state-signal { border:1px solid var(--state); background:var(--state); color:#081421; font-size:15px; }
+.task-deadline { color:#8492a3; font-size:10px; font-variant-numeric:tabular-nums; }
+.wbs-card { border-left-width:5px; background:linear-gradient(120deg,color-mix(in srgb,var(--state) 17%,transparent),transparent 90%),#101317; }
+.wbs-body button.issue-title { min-height:59px; padding:10px 0; }
+.hierarchy .wbs-card,.network .wbs-card { padding:10px; }
+.hierarchy button.issue-title,.network button.issue-title { min-height:0; height:47px; padding:6px 0; font-size:12px; line-height:1.5; }
+.hierarchy .wbs-card footer,.network .wbs-card footer { margin-top:auto; padding-top:5px; }
+.hierarchy .task-signals,.network .task-signals { margin-top:6px; }
