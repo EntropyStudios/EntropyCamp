@@ -131,6 +131,19 @@
         return `<div class="detail-field ${/内容|标准|备注|需求/.test(name) ? "wide" : ""}"><dt>${esc(name)}</dt><dd>${rendered}</dd></div>`;
       }).join("");
       $("#detailContent").innerHTML = `<h3 class="detail-title">${esc(text(field(data,ids.title,"工作内容")))}</h3><p class="detail-record">${esc(data.record_id)} · 实时只读详情</p><dl class="detail-grid">${content}</dl>`;
+      try {
+        const mirror = await fetch('/api/wbs', {cache:'no-store'}).then(r=>r.json());
+        if (!dialog.open || detailId !== detailRequestId) return;
+        const links = Object.entries(mirror.links || {}).filter(([,value])=>value.recordIds.includes(recordId));
+        const section = document.createElement('div');
+        section.className = 'detail-record';
+        section.append('对应Linear父TASK：');
+        if (!links.length) section.append('未确认关联，可到部门WBS中选择。');
+        for (const [id] of links) {
+          const a=document.createElement('a'); a.href='wbs.html?issue='+encodeURIComponent(id)+'&project='+encodeURIComponent(mirror.issues.find(i=>i.id===id)?.projectId||'__none'); a.textContent=id+' '; section.append(a);
+        }
+        $("#detailContent").prepend(section);
+      } catch { /* Details remain usable if WBS is unavailable. */ }
     } catch(e) { if (detailId === detailRequestId) $("#detailContent").textContent = e.message; }
   }
   async function settings() {
@@ -171,5 +184,5 @@
     try {const config=await api("settings");if(config.configured){await metadata();ready=true;await load();}else {notice("首次使用请在连接设置中填写只读密钥。");}}
     catch(e){notice(e.message);}
   }
-  init();
+  init().then(() => { const id=new URLSearchParams(location.search).get('record'); if(id && /^rec[A-Za-z0-9_-]+$/.test(id)) openDetail(id); });
 })();

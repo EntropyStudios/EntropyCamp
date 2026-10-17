@@ -4,6 +4,8 @@
 
 英文名 **EntropyCamp**，中文 **星营**。Entropy 呼应信息、不确定性与秩序，Camp 是任务、模型与想法汇聚的营地。这是概念对应，不是把英文直译成「熵营」。
 
+部门WBS入口：`http://127.0.0.1:8765/wbs.html`。支持项目/模块/父TASK、按需展开子Issue、接取与状态筛选、依赖图、剩余工期甘特及飞书任务确认关联与双向跳转。读取Linear镜像，不自动写入外部系统；更新及接口约定见 [docs/WBS_API.md](docs/WBS_API.md)。
+
 ## 位置与启动
 
 程序根目录：`/mnt/mydisk/My_project/Entropy/EntropyCamp`。

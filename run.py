@@ -27,11 +27,17 @@ from background_events import BackgroundEventMonitor
 from codex_monitor import CodexRolloutMonitor, CodexStateUnavailable
 from feishu_notify import FeishuNotificationError, FeishuNotifier
 from performance_client import PerformanceClient, PerformanceError
+from wbs_store import WbsStore, WbsError
+from linear_auth import LinearAuth, AuthError
 from task_sync import (
     ANALYSIS_SCHEMA,
+    ACTION_KINDS,
+    WBS_ANALYSIS_RULES,
+    WBS_EXECUTION_RULES,
     analysis_prompt,
     decision_prompt,
     normalize_analysis,
+    validate_wbs_selection,
     parse_analysis_text,
     write_json_atomic,
 )
@@ -1555,6 +1561,7 @@ def submit_task_sync_decision(
         raise ValueError("任务同步批次不存在")
     if run.get("status") not in {"review", "completed", "awaiting_execution"}:
         raise StateConflict("当前批次还不能提交")
+    validate_wbs_selection(analysis)
     normalized = normalize_analysis(analysis)
     revision = len(run.get("decisionRevisions") or []) + 1
     decision = {
@@ -1620,6 +1627,10 @@ def task_sync_request(run_id: str, phase: str) -> dict[str, Any]:
         instructions += (
             "本次只分析：根据原始对话以及 Linear 现有信息，整理已有 issue 更新建议、新建 Linear 建议、飞书任务建议。"
             "按对话顺序保留事实、指标、证据和完成边界；不猜 issue，不执行外部写入。\n"
+            + WBS_ANALYSIS_RULES + "\n"
+            "存在归属、需求、证据或参数疑问时，用可选questions数组返回0–20个简短问题（不凑数量），"
+            "每题给context、可选options、关联建议relatedItemIds，status=pending、answer为空。"
+            "关联建议默认不勾选；用固定建议id与问题关联。没有疑问可省略questions或返回空数组。\n"
             "将符合 analysisSchema 的结果 POST 到 " + api + "/result，JSON 为 "
             f'{{"runId":"{run_id}","phase":"analysis","expectedRevision":{revision},"analysis":{{...}}}}。\n'
             "最后在当前对话简要说明结果。页面会读取接口返回的建议。"
@@ -1633,7 +1644,10 @@ def task_sync_request(run_id: str, phase: str) -> dict[str, Any]:
             f"执行第 {decision_revision} 版 decisionRevisions 中的 analysis（人工确认快照）。"
             "仅执行 selected=true 的 Linear 更新/创建；按原对话顺序评论。"
             "飞书仅生成用户可复制的草稿。检查 executionHistory，避免重复创建或评论；"
+            "先读取questions中的回答与忽略状态。回答是对需求的补充；pending或ignored不代表同意任何假设。"
+            "若关联建议仍有未确认问题，跳过该建议并说明；若答案需要实质改变已确认建议，先回报澄清，不擅自扩大执行范围。"
             "若前次执行部分成功或状态不明，先核对 Linear，再补剩余项目。\n"
+            + WBS_EXECUTION_RULES + "\n"
             "开始前 POST " + api + "/result，"
             f'JSON 为 {{"runId":"{run_id}","phase":"progress","expectedRevision":{revision},'
             '"message":"开始核对并执行已确认任务"}。使用返回的 run.revision 作为下一次 expectedRevision。\n'
@@ -1680,9 +1694,36 @@ def save_task_sync_result(body: dict[str, Any]) -> dict[str, Any]:
             result = body.get("result")
             if not isinstance(result, str) or not result.strip():
                 raise ValueError("执行结果不能为空")
+            operations = body.get("operations", [])
+            if not isinstance(operations, list) or len(operations) > 300:
+                raise ValueError("执行明细必须是列表，最多300项")
+            clean_operations = []
+            confirmed_items = {
+                row["id"]: row for kind in ACTION_KINDS
+                for row in decisions[-1]["analysis"].get(kind, [])
+            }
+            for operation in operations:
+                if not isinstance(operation, dict) or not isinstance(operation.get("itemId"), str) or not operation.get("itemId") or operation.get("status") not in {
+                    "success", "failed", "skipped", "unknown",
+                }:
+                    raise ValueError("执行明细需要itemId及success/failed/skipped/unknown状态")
+                confirmed = confirmed_items.get(operation["itemId"])
+                if confirmed is None or (operation["status"] == "success" and not confirmed.get("selected")):
+                    raise ValueError("执行明细须对应本版确认建议，未勾选项目不能记为成功")
+                comment_ids = operation.get("commentIds", [])
+                if not isinstance(comment_ids, list) or any(not isinstance(item, str) for item in comment_ids):
+                    raise ValueError("commentIds必须是字符串列表")
+                clean_operations.append({
+                    "itemId": str(operation["itemId"]), "status": operation["status"],
+                    "issueId": str(operation.get("issueId") or ""),
+                    "commentIds": comment_ids, "url": str(operation.get("url") or ""),
+                    "message": str(operation.get("message") or ""),
+                })
             history = list(run.get("executionHistory") or [])
-            history.append({"decisionRevision": body["decisionRevision"], "result": result, "completedAt": now})
-            run.update(status="completed", executionResult=result, executionHistory=history, executionCompletedAt=now)
+            history.append({"decisionRevision": body["decisionRevision"], "result": result,
+                            "operations": clean_operations, "completedAt": now})
+            run.update(status="completed", executionResult=result, executionHistory=history,
+                       executionOperations=clean_operations, executionCompletedAt=now)
         run.update(revision=revision + 1, error="")
         return run
 
@@ -1771,6 +1812,11 @@ class ReminderServer(http.server.ThreadingHTTPServer):
 
 
 class ReminderHandler(http.server.SimpleHTTPRequestHandler):
+    def log_request(self, code='-', size='-'):
+        if urllib.parse.urlsplit(self.path).path == '/api/wbs/oauth/callback':
+            self.log_message('"GET /api/wbs/oauth/callback [redacted]" %s %s', code, size)
+            return
+        super().log_request(code, size)
     protocol_version = "HTTP/1.1"
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -1861,11 +1907,13 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
             return None
         return super().send_head()
 
-    def _json_response(self, payload: dict[str, Any], status: int = 200) -> None:
+    def _json_response(self, payload: dict[str, Any], status: int = 200, headers=None) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        for key, value in (headers or {}).items():
+            self.send_header(key, value)
         self.end_headers()
         self.wfile.write(body)
 
@@ -2040,6 +2088,25 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
         if not self._local_host():
             return
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/wbs/oauth/callback":
+            try:
+                LinearAuth(get_business_store().directory).callback(urllib.parse.parse_qs(parsed.query), self.headers.get('Cookie'))
+                message = 'Linear登录成功，可刷新任务'
+            except AuthError as error:
+                message = str(error)
+            self.send_response(303)
+            self.send_header('Location', '/wbs.html?login=' + urllib.parse.quote(message))
+            self.send_header('Set-Cookie', 'entropy_linear_state=; Max-Age=0; HttpOnly; SameSite=Lax; Path=/api/wbs/oauth')
+            self.send_header('Referrer-Policy', 'no-referrer')
+            self.end_headers()
+            return
+        if parsed.path == "/api/wbs/oauth/status":
+            self._json_response(LinearAuth(get_business_store().directory).status())
+            return
+        if parsed.path in {"/api/wbs", "/api/wbs/settings"}:
+            client = WbsStore(get_business_store().directory)
+            self._json_response(client.settings() if parsed.path.endswith("settings") else client.snapshot())
+            return
         if parsed.path.startswith("/api/performance/"):
             client = PerformanceClient(get_business_store().directory)
             resource = parsed.path.removeprefix("/api/performance/")
@@ -2133,6 +2200,36 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
         if not self._local_host():
             return
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path.startswith("/api/wbs/"):
+            try:
+                body = self._json_request(max_bytes=24 * 1024 * 1024)
+                client = WbsStore(get_business_store().directory)
+                action = parsed.path.removeprefix("/api/wbs/")
+                if action == "oauth/configure":
+                    result = LinearAuth(get_business_store().directory).configure(body)
+                elif action == "oauth/start":
+                    result, cookie = LinearAuth(get_business_store().directory).start()
+                    self._json_response(result, headers={'Set-Cookie':cookie})
+                    return
+                elif action == "oauth/logout":
+                    result = LinearAuth(get_business_store().directory).logout()
+                elif action == "settings":
+                    result = client.save_settings(body)
+                elif action == "preview":
+                    result = client.preview(body)
+                elif action == "import":
+                    result = client.import_data(body)
+                elif action == "link":
+                    result = client.link(body)
+                elif action == "refresh":
+                    candidate = client.fetch_linear()
+                    result = {"candidate": candidate, "preview": client.preview(candidate)}
+                else:
+                    raise WbsError("不支持的WBS操作")
+                self._json_response(result)
+            except (WbsError, AuthError, ValueError, PermissionError) as error:
+                self._json_response({"error": str(error)}, 403 if isinstance(error, PermissionError) else 409 if "版本冲突" in str(error) else 400)
+            return
         if parsed.path == "/api/performance/settings":
             try:
                 body = self._json_request(max_bytes=16384)

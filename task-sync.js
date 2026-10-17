@@ -19,9 +19,13 @@
   const analysisSummary = document.querySelector("#analysisSummary");
   const linearUpdates = document.querySelector("#linearUpdates");
   const newLinearTasks = document.querySelector("#newLinearTasks");
+  const parentTaskRequests = document.querySelector("#parentTaskRequests");
+  const acceptanceRequests = document.querySelector("#acceptanceRequests");
   const feishuTasks = document.querySelector("#feishuTasks");
   const ignoredSection = document.querySelector("#ignoredSection");
   const ignoredItems = document.querySelector("#ignoredItems");
+  const questionsSection = document.querySelector("#questionsSection");
+  const questionItems = document.querySelector("#questionItems");
   const submitDecisionButton = document.querySelector("#submitDecisionButton");
   const executionResult = document.querySelector("#executionResult");
   const executionResultText = document.querySelector("#executionResultText");
@@ -189,6 +193,21 @@
     return `<label class="${wide ? "wide" : ""}"><span>${label}</span>${control}</label>`;
   }
 
+  function parentSummary(row) {
+    const identifier = String(row.parentIssueId || "").trim();
+    const title = row.parentTitle || "父任务标题待核对";
+    const text = identifier ? `${identifier}｜${title}` : "未确认父TASK，不能创建子Issue";
+    return `<div class="parent-task-summary"><strong>对应父TASK</strong><span>${escapeHtml(text)}</span></div>`;
+  }
+
+  function updateKindField(value) {
+    return `<label><span>建议类别</span><select data-field="updateKind">
+      <option value="progress" ${!value || value === "progress" ? "selected" : ""}>子Issue过程更新</option>
+      <option value="scope_change" ${value === "scope_change" ? "selected" : ""}>合同变更（需单独确认）</option>
+      ${value === "acceptance" ? '<option value="acceptance" selected>旧验收建议：请重新分析分类</option>' : ""}
+    </select></label>`;
+  }
+
   function renderRows(target, rows, kind) {
     target.className = "result-list";
     if (!rows.length) {
@@ -203,6 +222,10 @@
           <div class="field-grid">
             ${editableField("Issue", "issueId", row.issueId)}
             ${editableField("标题", "title", row.title)}
+            ${editableField("父TASK", "parentIssueId", row.parentIssueId || "")}
+            ${editableField("父TASK标题", "parentTitle", row.parentTitle || "")}
+            ${updateKindField(row.updateKind)}
+            ${editableField("归属依据（父合同覆盖哪项要求）", "scopeEvidence", row.scopeEvidence || "", true, true)}
             ${editableField("更新理由", "reason", row.reason, true, true)}
           </div>`;
       } else if (kind === "newLinearTasks") {
@@ -210,11 +233,43 @@
           <div class="field-grid">
             ${editableField("标题", "title", row.title, true)}
             ${editableField("父任务", "parentIssueId", row.parentIssueId || "")}
+            ${editableField("父TASK标题", "parentTitle", row.parentTitle || "")}
+            ${editableField("Project", "project", row.project || "")}
+            ${editableField("Module", "module", row.module || "")}
+            ${editableField("任务类型", "taskType", row.taskType || "")}
+            ${editableField("对应飞书记录ID（没有则留空）", "feishuRecordId", row.feishuRecordId || "")}
+            ${editableField("归属依据（父合同覆盖哪项要求）", "scopeEvidence", row.scopeEvidence || "", true, true)}
             ${editableField("截止日期", "dueDate", row.dueDate || "")}
             ${editableField("标签（逗号分隔）", "labels", (row.labels || []).join(", "), true)}
             ${editableField("创建理由", "reason", row.reason, true, true)}
-            ${editableField("任务描述与验收", "description", row.description, true, true)}
+            ${editableField("子Issue正文（四部分模板）", "description", row.description, true, true)}
           </div>`;
+      } else if (kind === "parentTaskRequests") {
+        fields = `<div class="field-grid">
+          ${editableField("父任务草稿标题", "title", row.title, true)}
+          ${editableField("候选Project", "project", row.project || "")}
+          ${editableField("候选Module", "module", row.module || "")}
+          ${editableField("对应飞书记录ID", "feishuRecordId", row.feishuRecordId || "")}
+          ${editableField("为何需要先确认父任务", "reason", row.reason, true, true)}
+          ${editableField("要解决的问题及价值", "purpose", row.purpose || "", true, true)}
+          ${editableField("希望得到的结果", "expectedResult", row.expectedResult || "", true, true)}
+          ${editableField("如何验证", "validation", row.validation || "", true, true)}
+          ${editableField("与现有任务的关系", "existingTaskRelation", row.existingTaskRelation || "", true, true)}
+          ${editableField("预计投入", "estimatedEffort", row.estimatedEffort || "")}
+          ${editableField("所需支持", "supportNeeded", row.supportNeeded || "")}
+          ${editableField("是否愿意接取", "willingToTake", row.willingToTake || "")}
+          ${editableField("补充说明（兼容历史草稿）", "description", row.description, true, true)}
+        </div><button type="button" class="secondary-button" data-copy-parent>复制父任务确认请求</button>`;
+      } else if (kind === "acceptanceRequests") {
+        fields = `<div class="field-grid">
+          ${editableField("父TASK编号", "issueId", row.issueId)}
+          ${editableField("父TASK标题", "parentTitle", row.parentTitle || "")}
+          ${editableField("父TASK归属编号", "parentIssueId", row.parentIssueId || row.issueId || "")}
+          ${editableField("建议标题", "title", row.title)}
+          ${editableField("对应推进子Issue（逗号分隔）", "childIssueIds", (row.childIssueIds || []).join(", "), true)}
+          ${editableField("整体结果与验收依据", "scopeEvidence", row.scopeEvidence || "", true, true)}
+          ${editableField("申请理由、证据及未完成边界", "reason", row.reason, true, true)}
+        </div>`;
       } else {
         fields = `
           <div class="field-grid">
@@ -230,8 +285,9 @@
       return `
         <article class="result-item" data-kind="${kind}" data-item-id="${escapeHtml(row.id)}">
           <div class="result-item-head">
-            <input type="checkbox" data-field="selected" ${checked} aria-label="选择此建议" />
+            ${kind === "parentTaskRequests" ? "" : `<input type="checkbox" data-field="selected" ${checked} aria-label="选择此建议" />`}
             <div class="result-item-body">
+              ${["linearUpdates", "newLinearTasks", "acceptanceRequests"].includes(kind) ? parentSummary(row) : ""}
               ${fields}
               <div class="source-refs">来源：${escapeHtml((row.sourceThreadIds || []).join("、") || "未标注")}</div>
             </div>
@@ -246,8 +302,27 @@
     draftRevision = Number(run.revision || 0);
     const analysis = run.analysis || {};
     analysisSummary.value = analysis.summary || "";
+    const questions = analysis.questions || [];
+    questionsSection.hidden = !questions.length;
+    document.querySelector("#questionCount").textContent = questions.length;
+    questionItems.innerHTML = questions.map((q) => `
+      <article class="result-item" data-question-id="${escapeHtml(q.id)}">
+        <h4>${escapeHtml(q.question)}</h4>
+        <p>${escapeHtml(q.context || "")}</p>
+        <div class="question-options">${(q.options || []).map((option) => `<button type="button" class="secondary-button" data-answer-option="${escapeHtml(option)}">${escapeHtml(option)}</button>`).join("")}</div>
+        <label class="summary-field"><span>你的回答</span><textarea data-question-answer rows="2">${escapeHtml(q.answer || "")}</textarea></label>
+        <label><span>处理方式</span><select data-question-status>
+          <option value="pending" ${q.status === "pending" ? "selected" : ""}>暂未确认</option>
+          <option value="answered" ${q.status === "answered" ? "selected" : ""}>已回答</option>
+          <option value="ignored" ${q.status === "ignored" ? "selected" : ""}>忽略此问题</option>
+        </select></label>
+      </article>`).join("");
     renderRows(linearUpdates, analysis.linearUpdates || [], "linearUpdates");
     renderRows(newLinearTasks, analysis.newLinearTasks || [], "newLinearTasks");
+    renderRows(parentTaskRequests, analysis.parentTaskRequests || [], "parentTaskRequests");
+    renderRows(acceptanceRequests, analysis.acceptanceRequests || [], "acceptanceRequests");
+    document.querySelector("#acceptanceCount").textContent = (analysis.acceptanceRequests || []).length;
+    document.querySelector("#parentTaskCount").textContent = (analysis.parentTaskRequests || []).length;
     renderRows(feishuTasks, analysis.feishuTasks || [], "feishuTasks");
     document.querySelector("#linearUpdateCount").textContent = (analysis.linearUpdates || []).length;
     document.querySelector("#newLinearCount").textContent = (analysis.newLinearTasks || []).length;
@@ -279,7 +354,12 @@
     copyExecutionRequest.hidden = run.status !== "awaiting_execution";
     reviewForm.hidden = !run.analysis || waiting;
     executionResult.hidden = !run.executionResult;
-    executionResultText.textContent = run.executionResult || "";
+    const operations = run.executionOperations || [];
+    const operationLines = operations.map((item) => {
+      const status = {success: "成功", failed: "失败", skipped: "跳过", unknown: "状态待核对"}[item.status] || item.status;
+      return `[${status}] ${item.itemId} ${item.issueId || ""}\n${item.url || ""}\n${item.message || ""}\n评论ID：${(item.commentIds || []).join("、") || "无"}`;
+    });
+    executionResultText.textContent = [run.executionResult || "", ...operationLines].filter(Boolean).join("\n\n");
     if (run.analysis && !waiting) {
       renderAnalysis(run);
       submitDecisionButton.querySelector("span").textContent = run.status === "completed" ? "保存修订并复制请求" : "保存确认并复制请求";
@@ -388,6 +468,9 @@
         row.parentIssueId = row.parentIssueId || null;
       }
       if (kind === "feishuTasks") row.dueDate = row.dueDate || null;
+      if (kind === "acceptanceRequests") {
+        row.childIssueIds = String(row.childIssueIds || "").split(/[，,、\s]+/).map((item) => item.trim()).filter(Boolean);
+      }
       return row;
     });
   }
@@ -398,8 +481,14 @@
       summary: analysisSummary.value.trim(),
       linearUpdates: serializeRows(linearUpdates, original.linearUpdates || [], "linearUpdates"),
       newLinearTasks: serializeRows(newLinearTasks, original.newLinearTasks || [], "newLinearTasks"),
+      parentTaskRequests: serializeRows(parentTaskRequests, original.parentTaskRequests || [], "parentTaskRequests"),
+      acceptanceRequests: serializeRows(acceptanceRequests, original.acceptanceRequests || [], "acceptanceRequests"),
       feishuTasks: serializeRows(feishuTasks, original.feishuTasks || [], "feishuTasks"),
       ignored: original.ignored || [],
+      questions: (original.questions || []).map((q) => {
+        const element = [...questionItems.querySelectorAll("[data-question-id]")].find((item) => item.dataset.questionId === q.id);
+        return element ? {...q, answer: element.querySelector("[data-question-answer]").value.trim(), status: element.querySelector("[data-question-status]").value} : q;
+      }),
     };
   }
 
@@ -476,7 +565,63 @@
   analyzeButton.addEventListener("click", startAnalysis);
   refreshButton.addEventListener("click", async () => { await loadState(); loadSources(); });
   reviewForm.addEventListener("submit", submitDecision);
-  reviewForm.addEventListener("input", () => { draftDirty = true; });
+  reviewForm.addEventListener("input", (event) => {
+    draftDirty = true;
+    if (!["parentIssueId", "parentTitle"].includes(event.target.dataset.field)) return;
+    const item = event.target.closest("[data-item-id]");
+    const summary = item?.querySelector(".parent-task-summary");
+    if (!summary) return;
+    const parent = {
+      parentIssueId: item.querySelector('[data-field="parentIssueId"]')?.value,
+      parentTitle: item.querySelector('[data-field="parentTitle"]')?.value,
+    };
+    summary.outerHTML = parentSummary(parent);
+  });
+  reviewForm.addEventListener("change", () => { draftDirty = true; });
+  parentTaskRequests.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-copy-parent]");
+    if (!button) return;
+    const element = button.closest("[data-item-id]");
+    const value = (name) => element.querySelector(`[data-field="${name}"]`)?.value.trim() || "";
+    const prompt = `请先和我确认父TASK，不创建子Issue、不写入外部系统。
+批次：${currentRun()?.id || ""}
+建议ID：${element.dataset.itemId}
+标题：${value("title")}
+候选Project：${value("project")}
+候选Module：${value("module")}
+飞书记录：${value("feishuRecordId")}
+理由：${value("reason")}
+待确认内容：
+问题及价值：${value("purpose")}
+希望结果：${value("expectedResult")}
+验证方式：${value("validation")}
+与现有任务关系：${value("existingTaskRelation")}
+预计投入：${value("estimatedEffort")}
+所需支持：${value("supportNeeded")}
+是否愿意接取：${value("willingToTake")}
+${value("description")}
+父任务经我明确确认并发布后，再重新读取父Issue合同，二次分析这个批次的子Issue建议。`;
+    requestPanel.hidden = false;
+    requestText.value = prompt;
+    try {
+      await navigator.clipboard.writeText(prompt);
+      showToast("已复制，先到统管对话确认父任务");
+    } catch {
+      showToast("请从请求框手动复制");
+    }
+  });
+  questionItems.addEventListener("input", (event) => {
+    if (!event.target.matches("[data-question-answer]")) return;
+    event.target.closest("[data-question-id]").querySelector("[data-question-status]").value = event.target.value.trim() ? "answered" : "pending";
+  });
+  questionItems.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-answer-option]");
+    if (!button) return;
+    const element = button.closest("[data-question-id]");
+    element.querySelector("[data-question-answer]").value = button.dataset.answerOption;
+    element.querySelector("[data-question-status]").value = "answered";
+    draftDirty = true;
+  });
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) loadState({ quiet: true });
   });
