@@ -96,15 +96,19 @@
   function planWarnings(p){return `<div class="summary-block">${prefs.scope?'只计算该TASK下叶子推进Issue；父TASK不重复计时。':'父TASK总览：工期从内部叶子依赖汇总；展开单个TASK可查看具体推进。'} 只使用Linear真实阻塞关系；不会按机器人动作顺序造依赖。</div>`+(!p.valid?`<div class="warning">排期尚不完整，暂不显示关键路径或预计完工日期。${p.cycle?'<br>依赖存在循环，需核对Linear。':''}${p.missing.length?'<br>缺少明确剩余工期：'+p.missing.join('、'):''}${p.external.length?'<br>未完成或未知的外部前置：'+p.external.map(e=>esc(e.from+' → '+e.to)).join('、'):''}${p.uncertain.length?'<br>描述前置与原生阻塞未对齐：'+p.uncertain.map(e=>esc(e.from+' → '+e.to)).join('、'):''}</div>`:`<div class="summary-block">最长依赖链剩余 ${p.total} 工作日（未计算人员资源冲突及节假日）。</div>`);}
   function renderNetwork(p){
     const connected=new Set(p.edges.flatMap(e=>[e.from,e.to]));
+    const visibleNodes=p.nodes.filter(i=>visible(i)&&connected.has(i.id));
+    const visibleIds=new Set(visibleNodes.map(i=>i.id));
+    const visibleEdges=p.edges.filter(e=>visibleIds.has(e.from)&&visibleIds.has(e.to));
+    const hiddenEdges=p.edges.length-visibleEdges.length;
     const independent=p.nodes.filter(i=>!connected.has(i.id)&&visible(i));
     const independentHtml=independent.length?`<section class="module"><div class="module-heading"><h2>独立推进</h2><span>暂无真实前置关系，保持并行</span></div><div class="cards">${independent.map(i=>card(i)).join('')}</div></section>`:'';
     if(!connected.size)return independentHtml||'<div class="empty">当前范围没有推进任务</div>';
     const groups=new Map(),positions=new Map();p.nodes.filter(i=>connected.has(i.id)).forEach(i=>{if(!groups.has(i.level))groups.set(i.level,[]);groups.get(i.level).push(i);});
     const width=Math.max(800,...[...groups.keys()].map(n=>(n+1)*330+30)),height=Math.max(430,...[...groups.values()].map(ns=>ns.length*210+40));
     for(const [level,ns] of groups)ns.forEach((i,n)=>positions.set(i.id,{x:20+level*330,y:20+n*210}));
-    const lines=p.edges.map(e=>{let a=positions.get(e.from),b=positions.get(e.to);return `<path d="M${a.x+270},${a.y+75} C${a.x+305},${a.y+75} ${b.x-35},${b.y+75} ${b.x},${b.y+75}" fill="none" stroke="#8095aa" stroke-width="2" marker-end="url(#arrow)"/>`;}).join('');
-    const visibleNodes=p.nodes.filter(i=>visible(i)&&connected.has(i.id));
-    return `<div class="graph-tools"><button data-zoom="out">缩小</button><button data-zoom="in">放大</button><span>${Math.round(zoom*100)}% · 按依赖从左向右；同列任务可并行</span></div><div class="scroll" style="height:min(70vh,800px)"><div style="width:${width*zoom}px;height:${height*zoom}px"><div class="network" style="width:${width}px;height:${height}px;transform:scale(${zoom});transform-origin:top left"><svg width="${width}" height="${height}"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#8095aa"/></marker></defs>${lines}</svg>${visibleNodes.map(i=>{let xy=positions.get(i.id);return card(i,`style="left:${xy.x}px;top:${xy.y}px"`);}).join('')}</div></div></div>${independentHtml}`;
+    const lines=visibleEdges.map(e=>{let a=positions.get(e.from),b=positions.get(e.to);return `<path d="M${a.x+270},${a.y+75} C${a.x+305},${a.y+75} ${b.x-35},${b.y+75} ${b.x},${b.y+75}" fill="none" stroke="#8095aa" stroke-width="2" marker-end="url(#arrow)"/>`;}).join('');
+    const filterNote=hiddenEdges?`<div class="summary-block">当前筛选隐藏了 ${hiddenEdges} 条涉及不可见任务的依赖线；排期仍按完整依赖计算，筛选不会解除前置关系。</div>`:'';
+    return `${filterNote}<div class="graph-tools"><button data-zoom="out">缩小</button><button data-zoom="in">放大</button><span>${Math.round(zoom*100)}% · 按依赖从左向右；同列任务可并行</span></div><div class="scroll" style="height:min(70vh,800px)"><div style="width:${width*zoom}px;height:${height*zoom}px"><div class="network" style="width:${width}px;height:${height}px;transform:scale(${zoom});transform-origin:top left"><svg width="${width}" height="${height}"><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L7,3 z" fill="#8095aa"/></marker></defs>${lines}</svg>${visibleNodes.map(i=>{let xy=positions.get(i.id);return card(i,`style="left:${xy.x}px;top:${xy.y}px"`);}).join('')}</div></div></div>${independentHtml}`;
   }
   function renderGantt(p){
     if(!p.valid)return '<div class="empty">先在Linear描述中明确“WBS 剩余工期：N 个工作日”，并核对前置，再刷新。</div>';
@@ -112,7 +116,7 @@
     return `<div class="scroll"><table class="gantt"><thead><tr><th>任务 / 负责人</th><th>剩余工期 · 第0～${max}工作日（相对时间）</th><th>截止节点</th></tr></thead><tbody>${p.nodes.filter(visible).map(i=>`<tr><td><button data-open="${i.id}">${i.id} · ${esc(i.title)}</button><br><small>${esc(i.assignee||'待接取')} · ${esc(C.status(i))}</small></td><td><div class="track"><div class="bar ${i.critical?'critical':''}" style="left:${100*i.es/max}%;width:${100*(i.ef-i.es)/max}%" title="${i.es} → ${i.ef} 工作日"></div></div><small>${i.es} → ${i.ef} 工作日${i.critical?' · 关键链':''}</small></td><td>${esc(i.dueDate||'未定')}</td></tr>`).join('')}</tbody></table></div>`;
   }
   function renderLinks(){
-    const tasks=shownRoots(),used=new Set(Object.values(data.links).flatMap(v=>v.recordIds));
+    const tasks=shownRoots().filter(i=>!prefs.scope||i.id===prefs.scope),used=new Set(Object.values(data.links).flatMap(v=>v.recordIds));
     return `<div class="summary-block">关联只在本机保存，依据目的、范围和验收人工确认；不自动改Linear/飞书状态。${performanceError?esc(performanceError):'飞书已读取 '+records.length+' 条记录。'}<br>状态不同仅提示复核，“完成等待验证”不等于Linear Done。</div><table class="records-table"><thead><tr><th>父TASK</th><th>对应飞书记录 / 对账</th><th>操作</th></tr></thead><tbody>${tasks.map(i=>{
       const link=data.links[i.id],rs=(link?.recordIds||[]).map(id=>records.find(r=>r.record_id===id)||{record_id:id});
       return `<tr><td><a href="${i.url}" target="_blank" rel="noopener">${i.id}</a> ${esc(i.title)}<p>${esc(C.status(i))} · ${esc(i.assignee||'待接取')}</p></td><td>${rs.length?rs.map(r=>`<a href="performance.html?record=${encodeURIComponent(r.record_id)}">${esc(field(r,'工作内容')||r.record_id)}</a><p>飞书：${esc(field(r,'工作状态')||'本次未读到，待核对')} ｜ Linear：${esc(C.status(i))}<br>截止：${esc(field(r,'截止日期')?date(field(r,'截止日期')):'未定')} / ${esc(i.dueDate||'未定')}</p>`).join(''):'<span class="link-state">尚未确认对应关系</span>'}<p>${esc(link?.note||'')}</p></td><td><button data-open="${i.id}">查看范围 / 关联</button></td></tr>`;
