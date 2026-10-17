@@ -138,3 +138,49 @@
 @keyframes wbs-detail-enter { from { opacity:0; transform:translateX(18px); } }
 @media(max-width:1100px) { .toolbar { grid-template-columns:minmax(200px,1.5fr) 1fr 1fr; } .toolbar .search { grid-column:span 2; } .workspace-context { grid-template-columns:1.5fr 1fr; } .workspace-hint { display:none; } }
 @media(prefers-reduced-motion:reduce) { .wbs-body *, .wbs-body *::before { animation:none!important; transition:none!important; } }
+
+/* Keep the workspace in the first viewport; secondary controls unfold on demand. */
+.wbs-page { padding-top:12px; padding-bottom:20px; }
+.wbs-topbar { min-height:62px; }
+.wbs-heading { display:flex; align-items:baseline; gap:12px; }
+.wbs-heading h1 { margin:0; font-size:21px; }
+.wbs-heading h1 small { font-size:10px; }
+.wbs-topbar .work-button { height:33px; padding:0 13px; font-size:11px; }
+.wbs-main { padding-top:12px; }
+.workspace-context { grid-template-columns:minmax(280px,1.5fr) minmax(210px,1fr) auto; gap:16px; padding:9px 13px; border-bottom:0; }
+.workspace-context label { display:flex; align-items:center; gap:9px; }
+.workspace-context label>span { flex:none; }
+.workspace-context select { height:33px; padding:5px 9px; }
+.workspace-hint small { display:none; }
+.filter-disclosure { border-top:1px solid #ffffff0d; }
+.filter-disclosure>summary { padding:7px 13px; color:#a1aab6; font-size:10px; cursor:pointer; }
+.filter-disclosure>summary>span { margin-left:12px; color:#66717f; font-size:9px; }
+.filter-disclosure[open]>summary { color:#d8e6df; }
+.active-filter-count { margin-left:8px; padding:2px 6px; border-radius:4px; background:#83c8a921; color:#a4dcc2; font-size:9px; }
+.toolbar { padding:8px 13px 13px; }
+.meta { padding:7px 1px; font-size:9px; }
+.connection-panel { margin-bottom:8px; padding:5px 10px; border:0; border-radius:4px; background:transparent; font-size:10px; }
+.connection-panel[open] { padding:12px; background:#101215; border:1px solid var(--line); }
+.owner-legend { justify-content:space-between; gap:12px; padding:8px 0; margin:0; }
+.owner-key { display:flex; align-items:center; flex-wrap:wrap; gap:13px; }
+.state-overview { display:flex; gap:16px; }
+.state-overview>span { display:flex; align-items:center; gap:6px; color:#8f9baa; font-size:10px; }
+.state-overview b { color:#dae4ee; font-size:17px; font-weight:650; font-variant-numeric:tabular-nums; }
+.state-overview [data-state="进行中"] b { color:#71b8ff; }
+.state-overview [data-state="待验收"] b { color:#f2c16f; }
+.state-overview [data-state="待接取"] b { color:#ffb58b; }
+.graph-tools { margin:7px 0; gap:5px; }
+.graph-tools button { padding:6px 9px!important; font-size:10px!important; }
+.radial-scroll { height:calc(100svh - 235px); min-height:360px; }
+.wbs-card { border-left:3px solid var(--state); background:linear-gradient(120deg,color-mix(in srgb,var(--state) 9%,transparent),transparent 75%),#101317; }
+.wbs-card::before { opacity:.9; }
+.wbs-card[data-status="进行中"] { --state:#69b6ff; }
+.wbs-card[data-status="待验收"] { --state:#f0bb59; }
+.wbs-card[data-status="待接取"] { --state:#e7a17b; border-left-style:dashed; }
+.wbs-card[data-status="已完成"],.wbs-card[data-status="已取消"] { opacity:.68; }
+.card-head .badge { padding:4px 8px; font-size:10px; font-weight:700; background:color-mix(in srgb,var(--state) 18%,#101317); border-color:color-mix(in srgb,var(--state) 55%,transparent); color:color-mix(in srgb,var(--state) 80%,white); }
+.owner-avatar { background:color-mix(in srgb,var(--owner) 24%,#101317); border-color:var(--owner); color:#f4f7fa; font-weight:700; }
+.wbs-card .owner-badge { padding:3px 7px 3px 3px; border-radius:99px; background:color-mix(in srgb,var(--owner) 12%,transparent); }
+.wbs-card .owner-badge.unassigned { border:1px dashed #db9c7470; background:#db9c7410; color:#ecbb9e; }
+.hierarchy-group.project { border-color:#8acbb6; box-shadow:0 0 32px #82c2a319; }
+@media(max-width:1100px) { .workspace-context { grid-template-columns:minmax(260px,1.4fr) minmax(220px,1fr); } }

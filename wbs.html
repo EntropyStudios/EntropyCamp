@@ -21,14 +21,17 @@
         <label class="view-field"><span>查看</span><select id="view"><option value="wbs">WBS · 任务总览</option><option value="tree">WBS · 关系图</option><option value="cpm">CPM · 依赖关系</option><option value="gantt">甘特 · 剩余工期</option><option value="links">飞书对账</option></select></label>
         <div class="workspace-hint"><span class="read-only-dot"></span>只读镜像 <small>关联仅保存在本机</small></div>
       </div>
-      <div class="toolbar">
+      <details class="filter-disclosure"><summary>筛选任务 <span>范围 · 负责人 · 状态 · 搜索</span></summary><div class="toolbar">
         <label class="scope-field"><span>任务范围</span><select id="scope"><option value="">父TASK总览</option></select></label>
         <label><span>负责人</span><select id="owner"><option value="">全部人员</option><option value="__none">未接取</option></select></label>
         <label><span>工作状态</span><select id="status"><option value="">全部状态</option><option>待接取</option><option>已接取·待开始</option><option>待排期</option><option>待分拣</option><option>进行中</option><option>待验收</option><option>已完成</option><option>已取消</option></select></label>
         <label class="search"><span>搜索任务</span><input id="search" type="search" placeholder="编号、标题或子Issue"></label>
         <label class="check"><input type="checkbox" id="hideDone" checked><span>隐藏已结束</span></label>
-      </div>
+      </div></details>
     </section>
+    <div id="notice" role="status" hidden></div>
+    <div id="health"></div>
+    <div id="content"></div>
     <div class="meta"><span id="syncInfo">正在读取任务…</span><span id="counts"></span></div>
     <details class="connection-panel" id="connectionPanel">
       <summary id="authSummary">Linear连接与数据更新</summary>
@@ -36,9 +39,6 @@
       <div class="actions"><button id="refresh" class="wbs-primary">刷新Linear任务</button><button id="reloadLocal">重新载入本机数据</button><button id="login">登录Linear</button><button id="logout" hidden>退出本机登录</button></div>
       <details><summary>首次配置 / 备用方式</summary><p>首次登记EntropyCamp的OAuth应用；之后点“登录Linear”即可，只申请读取权限。</p><div class="actions"><button id="connection">配置OAuth应用</button><button id="copySync">复制AI更新请求</button></div></details>
     </details>
-    <div id="notice" role="status" hidden></div>
-    <div id="health"></div>
-    <div id="content"></div>
   </main>
 </div>
 <aside id="detail" hidden aria-label="任务详情"><div class="aside-head"><div><span class="eyebrow">TASK DETAILS</span><strong id="detailTitle"></strong></div><button id="closeDetail" aria-label="关闭详情">×</button></div><div id="detailBody"></div></aside>

@@ -2,12 +2,12 @@
   'use strict';
   const $=s=>document.querySelector(s), C=WbsCore, key='entropy-wbs-preferences-v1';
   let data={projects:[],issues:[],modules:[],links:{}}, records=[],performanceError='',candidate=null, previewRevision=null, selectedIssue=null, zoom=1;
-  let prefs={project:'',view:'wbs',scope:'',owner:'',status:'',search:'',hideDone:true};
+  let prefs={project:'',view:'tree',scope:'',owner:'',status:'',search:'',hideDone:true};
   try{prefs={...prefs,...JSON.parse(localStorage.getItem(key)||'{}')};}catch{}
   let expanded=new Set(Array.isArray(prefs.expanded)?prefs.expanded:[]);
   let radialNodes=[],radialEdges=[];
   prefs.nodePositions ||= {};
-  zoom=Math.max(.15,Math.min(1.5,Number(prefs.zoom)||1));
+  zoom=Math.max(.5,Math.min(1.5,Number(prefs.zoom)||.65));
   const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const date=x=>x?new Date(x).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}):'未同步';
   const field=(r,n)=>r.fields_by_name?.[n];
@@ -34,9 +34,11 @@
     if(!roots().some(i=>i.id===prefs.scope))prefs.scope='';
     for(const id of ['view','scope','owner','status','search'])$('#'+id).value=prefs[id];
     $('#hideDone').checked=prefs.hideDone;
+    const activeFilters=['scope','owner','status','search'].filter(id=>prefs[id]).length;
+    $('.filter-disclosure>summary').innerHTML=`筛选任务 ${activeFilters?`<b class="active-filter-count">${activeFilters} 项生效</b>`:''}<span>范围 · 负责人 · 状态 · 搜索${prefs.hideDone?' · 已隐藏结束任务':''}</span>`;
   }
   function ownerBadge(name){const o=C.ownerStyle(name);return `<span class="owner-badge ${o.unassigned?'unassigned':''}" style="--owner:${o.color}"><span class="owner-avatar" aria-hidden="true">${esc(o.initials)}</span>${esc(o.name)}</span>`;}
-  function ownerLegend(){return `<div class="owner-legend"><span>负责人标识（与状态色独立）</span>${[...new Set(current().map(i=>i.assignee).filter(Boolean))].sort().map(ownerBadge).join('')}${ownerBadge('')}</div>`;}
+  function ownerLegend(){const tasks=shownRoots().filter(i=>!prefs.scope||i.id===prefs.scope);return `<div class="owner-legend"><div class="state-overview">${['进行中','待验收','待接取'].map(s=>`<span data-state="${s}"><b>${tasks.filter(i=>C.status(i)===s).length}</b>${s}</span>`).join('')}</div><div class="owner-key">${[...new Set(current().map(i=>i.assignee).filter(Boolean))].sort().map(ownerBadge).join('')}${ownerBadge('')}</div></div>`;}
   function card(i,style='',tree=false){
     const g=C.graph(data.issues),children=g.descendants(i.id),n=children.filter(C.done).length;
     const root=g.rootOf(i.id),linked=data.links[root?.id]?.recordIds||[];
