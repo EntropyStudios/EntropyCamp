@@ -25,6 +25,7 @@ from typing import Any
 
 from background_events import BackgroundEventMonitor
 from codex_monitor import CodexRolloutMonitor, CodexStateUnavailable
+from claude_sessions import ClaudeSessions, is_claude
 from feishu_notify import FeishuNotificationError, FeishuNotifier
 from performance_client import PerformanceClient, PerformanceError
 from wbs_store import WbsStore, WbsError
@@ -1052,6 +1053,17 @@ class CodexBridge:
 CODEX_BRIDGE = CodexBridge()
 CODEX_MONITOR = CodexRolloutMonitor(CODEX_HOME)
 CODEX_WORK_LOGS = CodexWorkLogReader(CODEX_MONITOR, CODEX_BRIDGE)
+CLAUDE_SESSIONS = ClaudeSessions(Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude")))
+
+
+def local_ai_work_logs(thread_ids, since=None, until=None, include_process=True):
+    codex_ids = [i for i in thread_ids if not is_claude(i)]
+    claude_ids = [i for i in thread_ids if is_claude(i)]
+    rows = CODEX_WORK_LOGS.work_logs(codex_ids, since, until, include_process) if codex_ids else []
+    if claude_ids:
+        rows.extend(CLAUDE_SESSIONS.work_logs(claude_ids, since, until, include_process))
+    by_id = {r["id"]: r for r in rows}
+    return [by_id[i] for i in thread_ids if i in by_id]
 
 
 def _load_remote_codex_specs() -> list[dict[str, Any]]:
@@ -1180,6 +1192,7 @@ def list_all_codex_threads() -> list[dict[str, Any]]:
         ) as executor:
             for remote_threads in executor.map(read_remote, remote_items):
                 threads.extend(remote_threads)
+    threads.extend(CLAUDE_SESSIONS.list_threads())
     return threads
 
 
@@ -1277,7 +1290,7 @@ def _read_task_sync_window(
         if bridge is None:
             continue
         rows = (
-            CODEX_WORK_LOGS.work_logs(thread_ids, since, until, include_process=False)
+            local_ai_work_logs(thread_ids, since, until, include_process=False)
             if host_id == "local"
             else bridge.work_logs(thread_ids, since, until, include_process=False)
         )
@@ -1759,6 +1772,13 @@ def codex_statuses(refs: list[dict[str, str]]) -> list[dict[str, Any]]:
         grouped.setdefault(ref["hostId"], []).append(ref["id"])
     statuses_by_key: dict[tuple[str, str], dict[str, Any]] = {}
     for host_id, thread_ids in grouped.items():
+        if host_id == "local":
+            claude_ids = [identifier for identifier in thread_ids if is_claude(identifier)]
+            for status in CLAUDE_SESSIONS.thread_statuses(claude_ids):
+                statuses_by_key[(host_id, status["id"])] = status
+            thread_ids = [identifier for identifier in thread_ids if not is_claude(identifier)]
+            if not thread_ids:
+                continue
         bridge = CODEX_BRIDGE if host_id == "local" else REMOTE_CODEX_BRIDGES.get(host_id)
         if bridge is None:
             continue
@@ -2007,7 +2027,7 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
                 if bridge is None:
                     continue
                 logs = (
-                    CODEX_WORK_LOGS.work_logs(thread_ids, since, until, include_process)
+                    local_ai_work_logs(thread_ids, since, until, include_process)
                     if host_id == "local"
                     else bridge.work_logs(thread_ids, since, until, include_process)
                 )
@@ -2047,7 +2067,7 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
             ref if isinstance(ref, dict) else {"hostId": "local", "id": str(ref), "ref": str(ref)}
             for ref in refs
         ]
-        thread_ids = [ref["id"] for ref in refs if ref["hostId"] == "local"]
+        thread_ids = [ref["id"] for ref in refs if ref["hostId"] == "local" and not is_claude(ref["id"])]
         if not thread_ids:
             self._json_response({"available": False, "error": "没有关联的 Codex 对话"}, 400)
             return

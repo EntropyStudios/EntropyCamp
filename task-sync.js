@@ -394,7 +394,7 @@
     try {
       const result = await request("/api/codex/threads");
       sourceThreads = (result.threads || []).sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
-      managerThreads = sourceThreads.filter((thread) => thread.hostId === "local");
+      managerThreads = sourceThreads.filter((thread) => thread.hostId === "local" && thread.provider !== "claude");
       if (!sourcesInitialized) {
         selectedSourceRefs = new Set(Array.isArray(state?.selectedSourceRefs) ? state.selectedSourceRefs : sourceThreads.map(sourceRef));
         sourcesInitialized = true;

@@ -3879,7 +3879,7 @@ function syncWorkReflectionThreadSelection() {
 function renderWorkReflectionThreads() {
   workReflectionConversationOptions = workConversationChoices();
   if (!workReflectionConversationOptions.length) {
-    workReflectionThreads.innerHTML = '<div class="reflection-thread-empty">暂无关联的 Codex 对话，本次仍可正常保存班次。</div>';
+    workReflectionThreads.innerHTML = '<div class="reflection-thread-empty">暂无关联的 AI 对话，本次仍可正常保存班次。</div>';
     syncWorkReflectionThreadSelection();
     return;
   }
@@ -4750,8 +4750,9 @@ function populateCodexSelect(selectedId = "", selectedHost = "local") {
   select.innerHTML = `<option value="">不关联</option>${options
     .map((thread) => {
       const ref = codexThreadRef(thread.hostId, thread.id);
-      const source = thread.hostId === "local" ? "本机" : thread.sourceLabel || thread.hostId;
-      return `<option value="${escapeHtml(ref)}">[${escapeHtml(source)}] ${escapeHtml(thread.name)}</option>`;
+      const source = thread.sourceLabel || (thread.hostId === "local" ? "Codex · 本机" : thread.hostId);
+      const project = thread.provider === "claude" && thread.cwd ? ` · ${thread.cwd.split("/").filter(Boolean).pop()}` : "";
+      return `<option value="${escapeHtml(ref)}">[${escapeHtml(source)}] ${escapeHtml(thread.name)}${escapeHtml(project)}</option>`;
     })
     .join("")}`;
   select.value = selectedRef || "";
@@ -4794,7 +4795,7 @@ async function loadCodexThreads() {
   } catch {
     codexThreads = [];
     codexAvailable = false;
-    status.textContent = "Codex 暂时不可用";
+    status.textContent = "AI 对话暂时不可用";
   }
   const selected = parseCodexThreadRef(document.querySelector("#codexThread").value);
   populateCodexSelect(selected.threadId, selected.hostId);
@@ -4915,7 +4916,7 @@ function linkedCodexThreadIds() {
 function refreshCodexEventStream() {
   const threadIds = [...new Set(
     cards
-      .filter((card) => card.codexThreadId && card.codexHost === "local")
+      .filter((card) => card.codexThreadId && card.codexHost === "local" && !card.codexThreadId.startsWith("claude-"))
       .map((card) => card.codexThreadId),
   )].sort();
   const nextKey = threadIds.join("|");

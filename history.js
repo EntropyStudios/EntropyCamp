@@ -280,7 +280,7 @@
         "history-conversation-picker-empty",
         conversationSearch.value.trim()
           ? "没有找到匹配的已关联对话"
-          : "当前提醒卡片还没有关联 Codex 对话",
+          : "当前提醒卡片还没有关联 AI 对话",
       ));
     }
     conversationPicker.replaceChildren(fragment);
