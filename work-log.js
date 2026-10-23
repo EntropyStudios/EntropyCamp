@@ -181,7 +181,7 @@ function renderSummary() {
 
 function renderThreadList() {
   if (!cards.length) {
-    threadList.innerHTML = `<div class="empty-state compact-empty">还没有关联 Codex 对话的卡片</div>`;
+    threadList.innerHTML = `<div class="empty-state compact-empty">还没有关联 AI 对话的提醒</div>`;
     toggleSelectionButton.disabled = true;
     return;
   }
@@ -198,7 +198,7 @@ function renderThreadList() {
           <input data-report-card type="checkbox" value="${escapeHtml(card.id)}" ${checked} />
           <span>
             <strong>${escapeHtml(card.title || card.codexThreadName || "Codex 对话")}</strong>
-            <small>${escapeHtml(card.codexThreadName || "Codex 对话")} · 本班 ${count} 次</small>
+            <small>${card.codexThreadId.startsWith("claude-") ? "Claude Code · " : "Codex · "}${escapeHtml(card.codexThreadName || "AI 对话")} · 本班 ${count} 次</small>
           </span>
         </label>
       `;
@@ -214,8 +214,8 @@ function renderPage() {
 
 function itemLabel(item) {
   if (item.role === "user") return "我";
-  if (item.phase === "final_answer") return "Codex 最终回复";
-  return "Codex 过程";
+  if (item.phase === "final_answer") return "AI 最终回复";
+  return "AI 过程";
 }
 
 function buildMarkdown(report, selected) {
@@ -234,7 +234,7 @@ function buildMarkdown(report, selected) {
     const card = selectedByThread.get(codexThreadRef(thread));
     lines.push(`## ${card?.title || thread.name || "Codex 对话"}`);
     lines.push("");
-    lines.push(`Codex 对话：${card?.codexThreadName || thread.name || "未命名对话"}`);
+    lines.push(`${thread.provider === "claude" ? "Claude Code" : "Codex"} 对话：${card?.codexThreadName || thread.name || "未命名对话"}`);
     lines.push(`本班完成：${card ? workCountForCard(card) : 0} 次`);
     lines.push("");
     if (thread.error) {
@@ -270,7 +270,7 @@ async function generateReport() {
     return;
   }
   if (!selected.length) {
-    reportStatus.textContent = "先选择至少一个 Codex 对话";
+    reportStatus.textContent = "先选择至少一个 AI 对话";
     return;
   }
 
@@ -279,7 +279,7 @@ async function generateReport() {
   currentMarkdown = "";
   reportPreview.value = "";
   updateExportButtons();
-  reportStatus.textContent = "正在读取 Codex 对话…";
+  reportStatus.textContent = "正在读取 AI 对话…";
   const query = new URLSearchParams();
   [...new Set(selected.map(codexThreadRef))].forEach((id) => query.append("id", id));
   query.set("since", String(workSession.startedAt));
