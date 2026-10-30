@@ -9,6 +9,7 @@ const DAILY_QUOTE_KEY = "lumen-reminder-hourly-quote-v1";
 const WEATHER_CACHE_KEY = "lumen-reminder-weather-v1";
 const HEADER_CLOCK_KEY = "lumen-reminder-header-clock-v1";
 const WIDGET_SOURCE_KEY = "lumen-reminder-widget-source-v1";
+const REMINDER_PRESENTATION = new URLSearchParams(window.location.search).get("view") === "cosmos" ? "cosmos" : "cards";
 const UNIT_MS = {
   minute: 60 * 1000,
   hour: 60 * 60 * 1000,
@@ -4196,7 +4197,7 @@ function bubbleMarkup(card, now = Date.now(), modelKeys = new Map()) {
   const phaseStart = card.codexActivityStartedAt || (due ? card.codexLatestCompletedAt : null);
   const runtime = formatElapsedSince(phaseStart, now);
   const cardActionable = workSession.active && (due || state === "idle");
-  const hostLabel = card.codexHost && card.codexHost !== "local" ? "SSH" : "本机";
+  const hostLabel = card.codexHost && card.codexHost !== "local" ? "SSH" : card.codexThreadId?.startsWith("claude-") ? "Claude Code" : "本机";
   const effort = isGraphThreadActive(card) ? reasoningEffortLabel(card.codexReasoningEffort) : "";
   const statusText = linked
     ? due ? "有新回复" : state === "processing" ? "处理中" : "保持关注"
@@ -4217,6 +4218,75 @@ function bubbleMarkup(card, now = Date.now(), modelKeys = new Map()) {
       ${due ? `<span class="thread-bubble-action">点击标记已读</span>` : ""}
       <span class="thread-bubble-runtime" data-bubble-runtime="${escapeHtml(card.id)}" data-phase-start="${phaseStart || ""}">${runtime}</span>
     </article>`;
+}
+
+function reminderCardMarkup(card, now, { focus = false, compact = false } = {}) {
+  const rawState = getCardState(card, now);
+  const state = graphState(card, now);
+  const linked = Boolean(card.codexThreadId);
+  const due = state === "due";
+  const actionable = workSession.active && (due || rawState === "idle");
+  const hostLabel = card.codexHost && card.codexHost !== "local" ? "SSH" : card.codexThreadId?.startsWith("claude-") ? "Claude Code" : "本机";
+  const phaseStartedAt = Number(card.codexActivityStartedAt) || null;
+  const runtime = formatElapsedSince(phaseStartedAt, now);
+  const stateClass = due ? "due" : linked ? (rawState === "codex-paused" ? "paused" : "codex") : rawState;
+  const statusText = linked
+    ? due
+      ? "有新回复"
+      : state === "processing"
+        ? graphPhaseLabel(card, state)
+        : rawState === "codex-paused"
+          ? "提醒已暂停"
+          : "保持关注"
+    : rawState === "paused"
+      ? "提醒已暂停"
+      : rawState === "idle"
+        ? "点击开始"
+        : due
+          ? "现在"
+          : formatCountdown(card.nextAt);
+  const source = linked
+    ? [hostLabel, card.codexModel ? modelDisplayLabel(card.codexModel) : "Codex"].join(" · ")
+    : card.tag || "提醒";
+  const classes = [
+    "card",
+    `is-${stateClass}`,
+    state === "processing" ? "is-processing" : "",
+    focus ? "is-focus" : "",
+    compact ? "is-compact" : "",
+  ].filter(Boolean).join(" ");
+  return `
+    <article class="${classes}" data-card-id="${escapeHtml(card.id)}" tabindex="${actionable ? "0" : "-1"}" aria-label="${escapeHtml(card.title)}，${escapeHtml(statusText)}">
+      <div class="card-head">
+        <span class="tag">${escapeHtml(linked ? hostLabel : card.tag || "提醒")}</span>
+        <button class="edit-button" type="button" data-edit-card="${escapeHtml(card.id)}" aria-label="编辑 ${escapeHtml(card.title)}" title="编辑">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"></path></svg>
+        </button>
+      </div>
+      <h2>${escapeHtml(card.title)}</h2>
+      <div class="card-time">
+        <small>${linked ? "对话状态" : rawState === "idle" ? "提醒" : "剩余时间"}</small>
+        <strong class="countdown"${!linked && rawState === "running" ? ` data-countdown="${escapeHtml(card.id)}"` : ""}>${escapeHtml(statusText)}</strong>
+        ${linked && runtime ? `<span class="card-runtime" data-bubble-runtime="${escapeHtml(card.id)}" data-phase-start="${phaseStartedAt}">${escapeHtml(runtime)}</span>` : ""}
+      </div>
+      <div class="card-foot">
+        <span>${escapeHtml(source)}</span>
+        <span>${linked ? `本班 ${workCountForCard(card)} 次` : `每 ${escapeHtml(intervalText(card))}`}</span>
+      </div>
+      ${due ? '<span class="due-hint">点击标记已读</span>' : rawState === "idle" ? '<span class="card-start-hint">点击开始计时</span>' : ""}
+    </article>`;
+}
+
+function reminderCardsMarkup(sorted, now) {
+  if (!sorted.length) {
+    return '<div class="empty-state"><strong>还没有提醒</strong><span>新建提醒或关联 AI 对话后会显示在这里</span></div>';
+  }
+  const dueCards = sorted.filter((card) => getCardState(card, now) === "due");
+  if (!dueCards.length) return sorted.map((card) => reminderCardMarkup(card, now)).join("");
+  const secondaryCards = sorted.filter((card) => !dueCards.includes(card));
+  return `
+    <div class="focus-stage">${dueCards.map((card) => reminderCardMarkup(card, now, { focus: true })).join("")}</div>
+    ${secondaryCards.length ? `<div class="card-dock">${secondaryCards.map((card) => reminderCardMarkup(card, now, { compact: true })).join("")}</div>` : ""}`;
 }
 
 function graphMarkup(sorted, now) {
@@ -4533,8 +4603,25 @@ function render(options = {}) {
   document.body.classList.toggle("has-due-reminders", dueCards.length > 0);
   grid.classList.toggle("has-due", dueCards.length > 0);
   grid.classList.toggle("has-secondary", sorted.length > dueCards.length);
-  grid.classList.add("card-graph");
   grid.dataset.dueCount = String(dueCards.length);
+  if (REMINDER_PRESENTATION === "cards") {
+    conversationGraphMountVersion += 1;
+    cancelAnimationFrame(conversationGraphRenderFrame);
+    conversationGraphRenderFrame = 0;
+    conversationGraphPending = null;
+    conversationGraphController?.dispose?.();
+    conversationGraphController = null;
+    grid.classList.remove("card-graph", "is-3d-ready", "is-3d-fallback");
+    grid.classList.add("card-mode");
+    grid.setAttribute("aria-label", "提醒卡片");
+    const markup = reminderCardsMarkup(sorted, now);
+    if (grid.innerHTML !== markup) {
+      grid.innerHTML = markup;
+      animateCardLayout(previousRects);
+    }
+    return;
+  }
+  grid.classList.add("card-graph");
   if (!grid.querySelector("[data-graph-3d-shell]")) grid.innerHTML = graph3DMarkup(sorted, now);
   conversationGraphPending = { sorted, now, nodes: graph3DNodes(sorted, now), solarState: graph3DSolarState(now), reducedMotion: shouldReduceMotion() };
   if (conversationGraphRenderFrame) return;
@@ -5283,7 +5370,7 @@ window.addEventListener("pageshow", (event) => {
   if (!event.persisted) return;
   conversationGraphDisposed = false;
   grid.classList.remove("is-3d-ready", "is-3d-fallback");
-  grid.innerHTML = graph3DMarkup(cards, Date.now());
+  grid.innerHTML = REMINDER_PRESENTATION === "cosmos" ? graph3DMarkup(cards, Date.now()) : "";
   startCorpusClockAnimation();
   conversationGraphController?.setActive?.(!document.hidden);
   render({ animate: false });
