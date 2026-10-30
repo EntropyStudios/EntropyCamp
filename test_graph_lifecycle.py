@@ -29,7 +29,7 @@ Object.defineProperty(grid,'innerHTML',{set(value){
  shell={isConnected:true,querySelector:selector=>selector==='canvas'?canvas:null};
 }});
 let next=0;const frames=new Map();
-const context={grid,document:{hidden:false,body:{classList:classes()}},Date,Map,
+const context={REMINDER_PRESENTATION:'cosmos',grid,document:{hidden:false,body:{classList:classes()}},Date,Map,
  cards:[{id:'t',kind:'thread',state:'processing'}],workSession:{active:true},
  cardOrderCore:{sortCards:cards=>cards},getCardState:()=> 'processing',
  graph3DMarkup:()=>'<canvas>',graphMarkup:()=>'<article>',graph3DNodes:cards=>cards,

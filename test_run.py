@@ -2022,7 +2022,7 @@ class GraphLayoutTests(unittest.TestCase):
         self.assertIn('class="graph-cluster"', app)
         self.assertIn('class="graph-cluster-links"', app)
         self.assertIn('class="graph-unlinked"', app)
-        self.assertIn('aria-label="提醒关系图"', html)
+        self.assertIn('aria-label="提醒卡片"', html)
         self.assertRegex(css, r"\.model-bubble\s*\{[^}]*border-radius:\s*50%")
         self.assertRegex(css, r"\.graph-cluster\s*\{[^}]*grid-template-columns:\s*154px")
         self.assertIn(".graph-cluster-links", css)
