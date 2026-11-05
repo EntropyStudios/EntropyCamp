@@ -112,10 +112,21 @@ python3 run.py          # 或双击 启动提醒卡片.sh
 | `clipboard.*`, `clipboard-core.js` | 多剪贴板 TXT / MD，含 Markdown 表格渲染 |
 | `todo.*`, `todo-core.js` | 今日待办条、独立待办页、分类 / 优先级 / 截止时间与排序 |
 | `task-sync.*`, `task_sync.py` | Codex 增量对话归档、任务同步分析、人工审核与执行回传 |
+| `runtime.*`, `runtime_monitor.py` | 本机 CPU / 内存、当前用户进程、TCP / UDP 监听端口，只读排查测试服务 |
 | `widget_service.py`, `scriptable/*`, `scripts/*widget*` | iPhone 只读摘要、Scriptable 与令牌脚本 |
 | `test_run.py` | unittest，部分测试通过 Node 执行 JS |
 
 ## 测试
+
+### 本机运行状态
+
+主页的“运行状态”进入 `runtime.html`。默认显示开发 / 测试和监听端口的进程，支持按命令、目录、PID、端口搜索，以及按 CPU、RSS 内存、运行时长排序。详情可查看父进程、启动时间、工作目录和脱敏后的命令；端口页显示监听地址、访问范围和当前用户可见的进程归属。
+
+此功能针对 Linux，直接读取 `/proc`，端口使用系统 `ss`（iproute2），不需安装 Python 依赖。可见页面每 5 秒采样，后端共享 2 秒缓存；关闭页面不继续主动采样。首个样本的 CPU 显示“采样中”。默认不保存采样历史，不提供结束进程接口，不通过小组件公开。
+
+“开发 / 测试”和“运行超过 6 小时”仅供排查，不能判断是否遗留或可安全结束。进程 CPU 按单核 100% 计，整机 CPU 按所有核心合计 100% 计。RSS 含共享页，不能直接相加。其他用户和受保护进程的详情不可见，容器使用独立网络命名空间时，端口也不在此列表内。
+
+### 自动检查
 
 ```bash
 node --check app.js
