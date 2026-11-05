@@ -12,6 +12,14 @@ from state_store import BusinessStateStore, CARDS, SESSION, HISTORY, DEFAULTS
 
 
 class StateAPITests(unittest.TestCase):
+    def test_runtime_api_is_read_only_and_uncached(self):
+        with mock.patch.object(run.RUNTIME_MONITOR, "snapshot", return_value={"available": True, "processes": []}):
+            with urllib.request.urlopen(self.base + "/api/runtime", timeout=5) as response:
+                self.assertEqual(response.headers["Cache-Control"], "no-store")
+                self.assertEqual(json.load(response)["processes"], [])
+        with self.assertRaises(urllib.error.HTTPError):
+            self.request("/api/runtime", {"pid": 123, "action": "kill"})
+
     def test_sync_saved_results_do_not_wait_for_codex_thread_scan(self):
         with mock.patch.object(run.ReminderHandler, "_list_codex_threads", side_effect=RuntimeError("SSH列表不可用")):
             result = self.request("/api/task-sync?stateOnly=1")

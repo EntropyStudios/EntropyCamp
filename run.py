@@ -28,6 +28,7 @@ from codex_monitor import CodexRolloutMonitor, CodexStateUnavailable
 from claude_sessions import ClaudeSessions, is_claude
 from feishu_notify import FeishuNotificationError, FeishuNotifier
 from performance_client import PerformanceClient, PerformanceError
+from runtime_monitor import RuntimeMonitor
 from wbs_store import WbsStore, WbsError
 from linear_auth import LinearAuth, AuthError
 from task_sync import (
@@ -47,6 +48,7 @@ from state_store import BusinessStateStore, StateConflict, TASK_SYNC
 
 
 APP_DIRECTORY = Path(__file__).resolve().parent
+RUNTIME_MONITOR = RuntimeMonitor()
 OUTER_WILDS_MODEL_DIRECTORY = (
     APP_DIRECTORY / "private" / "outer-wilds-extracted" / "web-high-assets" / "glb"
 )
@@ -2108,6 +2110,9 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
         if not self._local_host():
             return
         parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/api/runtime":
+            self._json_response(RUNTIME_MONITOR.snapshot(), headers={"Cache-Control": "no-store"})
+            return
         if parsed.path == "/api/wbs/oauth/callback":
             try:
                 LinearAuth(get_business_store().directory).callback(urllib.parse.parse_qs(parsed.query), self.headers.get('Cookie'))

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#000000"><title>运行状态 · EntropyCamp</title>
+  <link rel="stylesheet" href="styles.css"><link rel="stylesheet" href="runtime.css">
+</head>
+<body>
+<div class="page runtime-page">
+  <header class="runtime-header">
+    <div><span class="runtime-eyebrow">LOCAL OBSERVATORY</span><h1>运行状态 <small id="machineName">本机</small></h1><p>找到遗留的测试服务，让电脑轻一点。</p></div>
+    <nav><a class="work-button link-button" href="./">返回提醒</a><button class="work-button" id="autoRefresh" aria-pressed="true">自动刷新 · 开</button><button class="new-button" id="refresh">立即刷新</button></nav>
+  </header>
+  <main>
+    <section class="runtime-metrics" aria-label="系统概况">
+      <article><span>CPU 使用率</span><strong id="cpu">—</strong><div class="runtime-meter"><i id="cpuBar"></i></div><small id="cpuNote">等待采样</small></article>
+      <article><span>内存</span><strong id="memory">—</strong><div class="runtime-meter"><i id="memoryBar"></i></div><small id="memoryNote">—</small></article>
+      <article><span>开发 / 测试进程</span><strong id="devCount">—</strong><small>Python · Node · 测试工具</small></article>
+      <article><span>监听端口</span><strong id="portCount">—</strong><small id="uptime">—</small></article>
+    </section>
+    <div class="runtime-notice" id="notice" role="status" hidden></div>
+    <section class="runtime-workspace">
+      <div class="runtime-toolbar">
+        <div class="runtime-tabs" role="group" aria-label="查看类型"><button id="processTab" aria-pressed="true">进程</button><button id="portTab" aria-pressed="false">端口</button></div>
+        <label class="runtime-search"><span class="sr-only">搜索进程、目录或端口</span><input id="search" type="search" placeholder="搜索名称、命令、目录、PID、端口…"></label>
+        <select id="filter" aria-label="进程范围"><option value="focus">开发与监听进程</option><option value="development">开发 / 测试</option><option value="long">开发进程 · 超过 6 小时</option><option value="all">当前用户全部进程</option></select>
+        <select id="sort" aria-label="进程排序"><option value="cpu">CPU 从高到低</option><option value="memory">内存从高到低</option><option value="age">运行时间从长到短</option><option value="pid">PID 从小到大</option></select>
+      </div>
+      <div class="runtime-caption"><span id="resultCount">正在读取本机状态…</span><span id="updatedAt">每 5 秒更新 · 只读</span></div>
+      <div class="runtime-table-wrap">
+        <table class="runtime-table" id="processTable"><thead><tr><th>进程 / 启动命令</th><th>PID</th><th>CPU</th><th>内存</th><th>已运行</th><th>监听端口</th><th></th></tr></thead><tbody id="processRows"></tbody></table>
+        <table class="runtime-table" id="portTable" hidden><thead><tr><th>端口</th><th>协议</th><th>监听地址</th><th>可访问范围</th><th>所属进程</th></tr></thead><tbody id="portRows"></tbody></table>
+        <div class="runtime-empty" id="empty" hidden>没有符合条件的记录</div>
+      </div>
+      <footer><p id="scope">进程仅限当前用户；初次采样后才能计算 CPU 使用率。</p><p>“开发 / 测试”和运行时长是排查线索，不代表可以安全结束。CPU 按单核 100% 计算，进程可超过 100%。本页不终止进程，也不保存采样历史。</p></footer>
+    </section>
+  </main>
+</div>
+<dialog id="processDialog" aria-labelledby="detailTitle"><div class="runtime-dialog-head"><div><span class="runtime-eyebrow">PROCESS DETAILS</span><h2 id="detailTitle">进程详情</h2></div><button id="closeDialog" aria-label="关闭">×</button></div><div id="detail"></div><div class="runtime-dialog-actions"><button class="work-button" id="copyCommand">复制启动命令</button><button class="new-button" id="doneDialog">完成</button></div><p id="copyStatus" role="status"></p></dialog>
+<script src="runtime.js"></script>
+</body>
+</html>
