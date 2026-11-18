@@ -13,7 +13,7 @@
       <header class="task-sync-topbar">
         <div class="task-sync-heading">
           <div><span>TASK SYNC</span><h1>任务同步</h1></div>
-          <p>Codex 增量对话 · 人工确认后提交</p>
+          <p>Codex / Claude Code 本机增量对话 · 人工确认后提交</p>
         </div>
         <a class="work-button link-button" href="./">返回提醒</a>
       </header>
@@ -40,6 +40,7 @@
             <div class="source-picker-head">
               <div><h3>来源对话</h3><span id="sourceSelectionSummary">正在读取…</span></div>
               <div class="source-picker-actions">
+                <select id="sourceProvider" aria-label="来源类型"><option value="all">全部本机 AI</option><option value="codex">Codex</option><option value="claude">Claude Code</option></select>
                 <label class="source-search" for="sourceSearch">
                   <svg aria-hidden="true"><use href="#icon-search"></use></svg>
                   <input id="sourceSearch" type="search" autocomplete="off" placeholder="搜索对话或目录" />
@@ -47,7 +48,8 @@
                 <button class="secondary-button" id="toggleSourcesButton" type="button">清空当前</button>
               </div>
             </div>
-            <div class="source-thread-list" id="sourceThreadList" role="group" aria-label="选择需要统计的 Codex 对话"></div>
+            <p class="source-window-help">新勾选的对话也会补读同步起点之后的已有内容，不受加入提醒卡片时间限制；仅收集本机对话。</p>
+            <div class="source-thread-list" id="sourceThreadList" role="group" aria-label="选择需要统计的本机 AI 对话"></div>
           </div>
         </section>
 

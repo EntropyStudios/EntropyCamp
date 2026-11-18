@@ -1191,10 +1191,12 @@ def save_task_sync_settings(
         cleaned = list(
             dict.fromkeys(
                 str(value).strip()
-                for value in source_refs[:MAX_REPORT_THREADS]
-                if str(value).strip() and len(str(value).strip()) <= 256
+                for value in source_refs
+                if str(value).strip() and len(str(value).strip()) <= 256 and "::" not in str(value)
             )
         )
+        if len(cleaned) > MAX_REPORT_THREADS:
+            raise ValueError(f"每次最多选择 {MAX_REPORT_THREADS} 个本机 AI 对话，请减少选择")
     manager = None
     if manager_thread_id is not None:
         manager_thread_id = str(manager_thread_id).strip()
@@ -1204,6 +1206,7 @@ def save_task_sync_settings(
                 for thread in list_all_codex_threads()
                 if thread.get("hostId") == "local"
                 and thread.get("id") == manager_thread_id
+                and not is_claude(manager_thread_id)
             ),
             None,
         )
@@ -1263,7 +1266,7 @@ def _read_task_sync_window(
     for thread in threads[:MAX_REPORT_THREADS]:
         host_id = str(thread.get("hostId") or "local")
         thread_id = str(thread.get("id") or "")
-        if not thread_id:
+        if not thread_id or host_id != "local":
             continue
         grouped.setdefault(host_id, []).append(thread_id)
         metadata[(host_id, thread_id)] = thread
@@ -1280,7 +1283,12 @@ def _read_task_sync_window(
             if host_id == "local"
             else bridge.work_logs(thread_ids, since, until, include_process=False)
         )
+        missing = set(thread_ids) - {str(row.get("id")) for row in rows}
+        if missing:
+            raise ValueError("选中的对话未完整返回，未推进同步起点：" + "、".join(sorted(missing)))
         for row in rows:
+            if row.get("error"):
+                raise ValueError(f"无法完整读取对话 {row.get('id', '')}：{row['error']}；同步起点未推进，请重试")
             if not row.get("turns"):
                 continue
             thread_id = str(row.get("id") or "")
@@ -1290,6 +1298,7 @@ def _read_task_sync_window(
                     **row,
                     "hostId": host_id,
                     "sourceLabel": source.get("sourceLabel") or host_id,
+                    "provider": "claude" if is_claude(thread_id) else "codex",
                     "cwd": source.get("cwd") or "",
                 }
             )
@@ -1448,23 +1457,36 @@ def start_task_sync_analysis(
     current = get_business_store().snapshot()["data"][TASK_SYNC]
     if any(run.get("status") in {"analyzing", "executing"} for run in current.get("runs") or []):
         raise StateConflict("已有任务同步正在处理中")
-    known_threads = list_all_codex_threads()
+    known_threads = [thread for thread in list_all_codex_threads() if thread.get("hostId", "local") == "local"]
     manager = next(
         (
             thread
             for thread in known_threads
-            if thread.get("hostId") == "local" and thread.get("id") == manager_thread_id
+            if thread.get("hostId") == "local" and thread.get("id") == manager_thread_id and not is_claude(manager_thread_id)
         ),
         None,
     )
     if manager is None:
         raise ValueError("找不到选择的本机统管对话")
+    if source_thread_refs is None and isinstance(current.get("selectedSourceRefs"), list):
+        source_thread_refs = current["selectedSourceRefs"]
     if source_thread_refs is not None:
         requested = {
             str(value).strip()
-            for value in source_thread_refs[:MAX_REPORT_THREADS]
-            if str(value).strip()
+            for value in source_thread_refs
+            if str(value).strip() and "::" not in str(value)
         }
+        if len(requested) > MAX_REPORT_THREADS:
+            raise ValueError(f"每次最多选择 {MAX_REPORT_THREADS} 个本机 AI 对话，请减少选择")
+        # Explicitly selected sessions may have fallen outside recent-list limits.
+        # Resolve them from their original logs, without using their selection time.
+        missing = requested - {str(thread.get("id")) for thread in known_threads}
+        if missing:
+            recovered = codex_statuses([{"hostId": "local", "id": identifier} for identifier in sorted(missing)])
+            known_threads.extend(thread for thread in recovered if thread.get("exists"))
+            unresolved = requested - {str(thread.get("id")) for thread in known_threads}
+            if unresolved:
+                raise ValueError("选中的对话日志暂不可用，未推进同步起点：" + "、".join(sorted(unresolved)))
         known_threads = [
             thread
             for thread in known_threads
@@ -1476,7 +1498,7 @@ def start_task_sync_analysis(
             in requested
         ]
         if not known_threads:
-            raise ValueError("请至少勾选一条需要统计的 Codex 对话")
+            raise ValueError("请至少勾选一条需要统计的本机 AI 对话（Codex / Claude Code）")
     if since_ms is None:
         saved = current.get("lastTriggeredAt")
         if isinstance(saved, (int, float)):
@@ -1497,6 +1519,7 @@ def start_task_sync_analysis(
         "windowStart": since_ms,
         "windowEnd": now_ms,
         "threads": logs,
+        "selectedSourceRefs": [str(thread["id"]) for thread in known_threads],
     }
     write_json_atomic(bundle_path, bundle)
     run = {
@@ -1523,7 +1546,7 @@ def start_task_sync_analysis(
         document["managerThreadName"] = run["managerThreadName"]
         if source_thread_refs is not None:
             document["selectedSourceRefs"] = list(
-                dict.fromkeys(str(value) for value in source_thread_refs)
+                dict.fromkeys(str(value) for value in source_thread_refs if "::" not in str(value))
             )
         document["lastTriggeredAt"] = now_ms
         document["updatedAt"] = now_ms
@@ -1534,7 +1557,7 @@ def start_task_sync_analysis(
     if not logs:
         empty = normalize_analysis(
             {
-                "summary": "该时间窗口内没有读取到新增 Codex 对话。",
+                "summary": "该时间窗口内没有读取到新增本机 AI 对话（Codex / Claude Code）。",
                 "linearUpdates": [],
                 "newLinearTasks": [],
                 "feishuTasks": [],
@@ -2170,7 +2193,7 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
                 manager_threads = [
                     thread
                     for thread in all_threads
-                    if thread.get("hostId") == "local"
+                    if thread.get("hostId") == "local" and not is_claude(thread.get("id"))
                 ]
                 self._json_response(
                     {
