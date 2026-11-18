@@ -4110,7 +4110,15 @@ main {
   font-size: 18px;
 }
 
-.card-grid.card-mode .card { animation:none; }
+.card-grid.card-mode .card {
+  animation: none;
+  /* The card view has a static backdrop. Keep the glass tint/highlight without
+     a separate blur surface and permanently promoted layer for every card. */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  will-change: auto;
+}
+.card-grid.card-mode .card.is-layout-animating { will-change: transform; }
 .card-grid.card-mode .card.is-processing { border-color:rgba(110,180,236,.5); }
 .card-grid.card-mode .card.is-processing .countdown { font-size:20px; color:#a2d3f5; }
 
