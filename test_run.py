@@ -1990,7 +1990,7 @@ console.log(JSON.stringify({ sorted, original: cards.map((card) => card.id) }));
             index.index('<script src="app.js"></script>'),
         )
         self.assertIn("const cardOrderCore = window.CardOrderCore;", app)
-        self.assertIn("const sorted = cardOrderCore.sortCards(cards, {", app)
+        self.assertIn('const sorted = cardOrderCore.sortCards(cards.filter((card) => !card.codexHost || card.codexHost === "local"), {', app)
 
 
 class GraphLayoutTests(unittest.TestCase):
