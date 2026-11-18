@@ -1164,37 +1164,21 @@ def list_all_codex_threads() -> list[dict[str, Any]]:
     try:
         local_threads = CODEX_BRIDGE.list_threads()
     except Exception:
-        local_threads = CODEX_MONITOR.list_threads()
+        try:
+            local_threads = CODEX_MONITOR.list_threads()
+        except Exception:
+            local_threads = []  # Claude remains selectable if Codex is unavailable.
     threads.extend(
-        {**thread, "hostId": "local", "sourceLabel": "本机"}
+        {**thread, "hostId": "local", "provider": "codex", "sourceLabel": "Codex · 本机"}
         for thread in local_threads
     )
 
-    def read_remote(item: tuple[str, CodexBridge]) -> list[dict[str, Any]]:
-        host_id, bridge = item
-        try:
-            return [
-                {
-                    **thread,
-                    "hostId": host_id,
-                    "sourceLabel": REMOTE_CODEX_LABELS.get(host_id, host_id),
-                }
-                for thread in bridge.list_threads(timeout=8)
-            ]
-        except Exception:
-            return []
-
-    remote_items = [
-        (spec["id"], REMOTE_CODEX_BRIDGES[spec["id"]])
-        for spec in REMOTE_CODEX_SPECS
-    ]
-    if remote_items:
-        with concurrent.futures.ThreadPoolExecutor(
-            max_workers=len(remote_items), thread_name_prefix="codex-remote-list"
-        ) as executor:
-            for remote_threads in executor.map(read_remote, remote_items):
-                threads.extend(remote_threads)
-    threads.extend(CLAUDE_SESSIONS.list_threads())
+    # Current tracking is local-only. Keep remote bridges for explicitly opening
+    # previously saved historical references, never for background discovery.
+    try:
+        threads.extend(CLAUDE_SESSIONS.list_threads())
+    except OSError:
+        pass  # A missing Claude directory must not hide local Codex sessions.
     return threads
 
 
@@ -1774,6 +1758,8 @@ def codex_statuses(refs: list[dict[str, str]]) -> list[dict[str, Any]]:
         grouped.setdefault(ref["hostId"], []).append(ref["id"])
     statuses_by_key: dict[tuple[str, str], dict[str, Any]] = {}
     for host_id, thread_ids in grouped.items():
+        if host_id != "local":
+            continue
         if host_id == "local":
             claude_ids = [identifier for identifier in thread_ids if is_claude(identifier)]
             for status in CLAUDE_SESSIONS.thread_statuses(claude_ids):

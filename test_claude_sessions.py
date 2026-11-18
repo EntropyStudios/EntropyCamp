@@ -10,6 +10,32 @@ UUID = "12345678-1234-1234-1234-123456789abc"
 
 
 class ClaudeSessionsTests(unittest.TestCase):
+    def test_local_discovery_never_connects_ssh_and_survives_codex_outage(self):
+        import run
+        self.append('user',1,'Claude task')
+        with patch.object(run.CODEX_BRIDGE,'list_threads',side_effect=RuntimeError('offline')), \
+             patch.object(run.CODEX_MONITOR,'list_threads',side_effect=RuntimeError('offline')), \
+             patch.object(run,'CLAUDE_SESSIONS',self.client), \
+             patch.object(run,'REMOTE_CODEX_BRIDGES',{'ssh-test': unittest.mock.Mock()}):
+            threads=run.list_all_codex_threads()
+            self.assertEqual([r['id'] for r in threads],[self.id])
+            self.assertEqual(threads[0]['provider'],'claude')
+            run.REMOTE_CODEX_BRIDGES['ssh-test'].list_threads.assert_not_called()
+
+    def test_ssh_is_not_polled_but_local_claude_is_tracked(self):
+        import run
+        from background_events import BackgroundEventMonitor
+        self.append('user',1,'Task')
+        refs=[{'hostId':'ssh-test','id':'remote'}, {'hostId':'local','id':self.id}]
+        remote=unittest.mock.Mock()
+        with patch.object(run,'CLAUDE_SESSIONS',self.client), patch.object(run,'REMOTE_CODEX_BRIDGES',{'ssh-test':remote}):
+            result=run.codex_statuses(refs)
+            self.assertEqual([r['id'] for r in result],[self.id])
+            remote.thread_statuses.assert_not_called()
+        self.assertEqual(BackgroundEventMonitor._linked_refs([
+            {'codexThreadId':'remote','codexHost':'ssh-test'},
+            {'codexThreadId':self.id,'codexHost':'local'}]),[{'hostId':'local','id':self.id,'ref':self.id}])
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

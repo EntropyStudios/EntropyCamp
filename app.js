@@ -3866,7 +3866,7 @@ function workCompletionBreakdown() {
 }
 
 function workConversationChoices() {
-  return workHistoryCore.groupConversationChoices(cards, workSession.countsByCardId);
+  return workHistoryCore.groupConversationChoices(cards.filter((card) => !card.codexHost || card.codexHost === "local"), workSession.countsByCardId);
 }
 
 function syncWorkReflectionThreadSelection() {
@@ -4034,7 +4034,7 @@ function widgetSnapshotProjection(now = Date.now()) {
   const currentWeather = weatherCache?.current;
   const currentTemperature = Number(currentWeather?.temperature_2m);
   const reminders = cardOrderCore
-    .sortCards(cards, { workActive: workSession.active, now })
+    .sortCards(cards.filter((card) => !card.codexHost || card.codexHost === "local"), { workActive: workSession.active, now })
     .slice(0, 4)
     .map((card) => ({
       title: card.title,
@@ -4591,7 +4591,7 @@ function render(options = {}) {
   const previousRects = options.animate === false ? new Map() : snapshotCardRects();
   ensureActiveWorkBaselines();
   const now = Date.now();
-  const sorted = cardOrderCore.sortCards(cards, {
+  const sorted = cardOrderCore.sortCards(cards.filter((card) => !card.codexHost || card.codexHost === "local"), {
     workActive: workSession.active,
     now,
   });
@@ -4833,7 +4833,16 @@ function populateCodexSelect(selectedId = "", selectedHost = "local") {
   const knownThread = selectedThreadRef.threadId && !codexThreads.some((thread) => codexThreadRef(thread.hostId, thread.id) === selectedRef)
     ? [{ id: selectedThreadRef.threadId, hostId: selectedThreadRef.hostId, name: selectedCard?.codexThreadName || "已关联的对话" }]
     : [];
-  const options = [...knownThread, ...codexThreads];
+  const providerSelect = document.querySelector("#aiProvider");
+  // Editing an existing card always reveals its selected local conversation.
+  if (selectedThreadRef.threadId && selectedThreadRef.hostId === "local") {
+    const selectedProvider = selectedThreadRef.threadId.startsWith("claude-") ? "claude" : "codex";
+    if (providerSelect.value !== "all" && providerSelect.value !== selectedProvider) providerSelect.value = selectedProvider;
+  }
+  const provider = providerSelect.value;
+  const options = [...knownThread, ...codexThreads].filter((thread) =>
+    (!thread.hostId || thread.hostId === "local") &&
+    (provider === "all" || (thread.id.startsWith("claude-") ? "claude" : "codex") === provider));
   select.innerHTML = `<option value="">不关联</option>${options
     .map((thread) => {
       const ref = codexThreadRef(thread.hostId, thread.id);
@@ -4878,7 +4887,8 @@ async function loadCodexThreads() {
     codexThreads = data.threads || [];
     codexAvailable = true;
     await applyCodexThreadNames(codexThreads);
-    status.textContent = codexThreads.length ? `最近 ${codexThreads.length} 个对话` : "没有找到对话";
+    const claudeCount = codexThreads.filter((thread) => thread.id.startsWith("claude-")).length;
+    status.textContent = codexThreads.length ? `Codex ${codexThreads.length - claudeCount} 个 · Claude Code ${claudeCount} 个 · 仅本机` : "没有找到本机对话";
   } catch {
     codexThreads = [];
     codexAvailable = false;
@@ -4997,7 +5007,7 @@ async function applyCodexStatuses(threadStatuses = [], options = {}) {
 }
 
 function linkedCodexThreadIds() {
-  return [...new Set(cards.filter((card) => card.codexThreadId).map(cardCodexThreadRef))].sort();
+  return [...new Set(cards.filter((card) => card.codexThreadId && (!card.codexHost || card.codexHost === "local")).map(cardCodexThreadRef))].sort();
 }
 
 function refreshCodexEventStream() {
@@ -5046,6 +5056,7 @@ function refreshCodexEventStream() {
 }
 
 async function fetchCodexStatusesForCards(linkedCards) {
+  linkedCards = linkedCards.filter((card) => !card.codexHost || card.codexHost === "local");
   if (!linkedCards.length) return [];
   const query = new URLSearchParams();
   [...new Set(linkedCards.map(cardCodexThreadRef))].forEach((ref) => query.append("id", ref));
@@ -5243,6 +5254,10 @@ document.querySelector("#closeDialogButton").addEventListener("click", closeDial
 document.querySelector("#cancelDialogButton").addEventListener("click", closeDialog);
 document.querySelector("#deleteCardButton").addEventListener("click", deleteCard);
 document.querySelector("#codexThread").addEventListener("change", updateReminderMode);
+document.querySelector("#aiProvider").addEventListener("change", () => {
+  populateCodexSelect();
+  updateReminderMode();
+});
 form.addEventListener("submit", saveCard);
 quickTodoForm?.addEventListener("submit", addQuickTodo);
 todayTodoItems?.addEventListener("click", (event) => {
