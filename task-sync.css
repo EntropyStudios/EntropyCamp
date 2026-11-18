@@ -27,6 +27,8 @@
 .source-picker-head h3 { margin:0; font-size:13px; font-weight:630; }
 .source-picker-head>div>span { display:block; margin-top:4px; color:rgba(245,245,247,.38); font-size:9px; font-variant-numeric:tabular-nums; }
 .source-picker-actions { display:flex; align-items:center; gap:8px; }
+.source-picker-actions select { height:36px; padding:0 10px; border:1px solid rgba(255,255,255,.11); border-radius:6px; background:#191a1b; color:var(--text); font:inherit; font-size:11px; }
+.source-window-help { font-size:11px; color:var(--muted); line-height:1.6; margin:10px 0; }
 .source-search { display:flex; width:280px; height:36px; align-items:center; gap:8px; padding:0 10px; border:1px solid rgba(255,255,255,.11); border-radius:6px; background:rgba(255,255,255,.035); color:var(--muted); transition:border-color 160ms ease,background 160ms ease; }
 .source-search:focus-within { border-color:rgba(255,255,255,.3); background:rgba(255,255,255,.06); }
 .source-search svg { width:15px; height:15px; flex:0 0 auto; }

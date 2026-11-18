@@ -173,6 +173,56 @@ class TaskSyncHelpersTest(unittest.TestCase):
 
 
 class ManualTaskSyncTest(unittest.TestCase):
+    def test_new_claude_selection_backfills_from_last_collection_and_is_frozen(self):
+        from claude_sessions import ClaudeSessions
+        from test_claude_sessions import UUID
+        home=Path(self.temp.name)/'claude'
+        project=home/'projects'/'-test'
+        project.mkdir(parents=True)
+        rows=[{'type':'user','uuid':'older-prompt','timestamp':'2026-10-23T10:00:01Z','message':{'content':'Earlier work'}},
+              {'type':'assistant','uuid':'older-answer','timestamp':'2026-10-23T10:00:05Z','message':{'content':[{'type':'text','text':'Earlier answer'}],'stop_reason':'end_turn'}}]
+        (project/(UUID+'.jsonl')).write_text(''.join(json.dumps(row)+'\n' for row in rows))
+        client=ClaudeSessions(home)
+        since=1792749600000  # 2026-10-23 10:00 UTC, before the selection was made.
+        run._task_sync_mutate(lambda d:{**d,'lastTriggeredAt':since,'selectedSourceRefs':['manager','ssh-old::remote']})
+        before=self.store.snapshot()['data'][TASK_SYNC]['lastTriggeredAt']
+        with patch.object(run,'CLAUDE_SESSIONS',client), patch.object(run,'list_all_codex_threads',return_value=[{'id':'manager','hostId':'local','name':'Manager'}]), \
+             patch.object(run.CODEX_BRIDGE,'start_turn',side_effect=AssertionError('No automatic send')):
+            # Session is absent from recent list; resolve the explicitly selected log.
+            batch=run.start_task_sync_analysis('manager',source_thread_refs=['claude-'+UUID,'ssh-old::remote'])
+        detail=run.task_sync_detail(batch['id'])
+        self.assertEqual(batch['windowStart'],before)
+        thread=detail['bundle']['threads'][0]
+        self.assertEqual(thread['provider'],'claude')
+        self.assertEqual(thread['turns'][0]['items'][-1]['text'],'Earlier answer')
+        self.assertEqual(detail['bundle']['selectedSourceRefs'],['claude-'+UUID])
+        saved=self.store.snapshot()['data'][TASK_SYNC]
+        self.assertEqual(saved['selectedSourceRefs'],['claude-'+UUID])
+        self.assertTrue(Path(batch['bundlePath']).is_file())
+
+    def test_saved_selection_is_used_and_ssh_is_excluded(self):
+        run._task_sync_mutate(lambda d:{**d,'lastTriggeredAt':1000,'selectedSourceRefs':['claude-test','ssh-old::remote']})
+        threads=[{'id':'manager','hostId':'local'},{'id':'claude-test','hostId':'local'}, {'id':'remote','hostId':'ssh-old'}]
+        with patch.object(run,'list_all_codex_threads',return_value=threads), patch.object(run,'_read_task_sync_window',return_value=[]) as reader:
+            batch=run.start_task_sync_analysis('manager')
+        self.assertEqual(reader.call_args.args[0],[threads[1]])
+        self.assertEqual(batch['windowStart'],1000)
+
+    def test_failed_source_read_does_not_advance_collection_cursor(self):
+        run._task_sync_mutate(lambda d:{**d,'lastTriggeredAt':1000})
+        threads=[{'id':'manager','hostId':'local'},{'id':'claude-test','hostId':'local'}]
+        with patch.object(run,'list_all_codex_threads',return_value=threads), patch.object(run,'local_ai_work_logs',return_value=[{'id':'claude-test','error':'log missing','turns':[]}]):
+            with self.assertRaisesRegex(ValueError,'未推进'):
+                run.start_task_sync_analysis('manager',source_thread_refs=['claude-test'])
+        saved=self.store.snapshot()['data'][TASK_SYNC]
+        self.assertEqual(saved['lastTriggeredAt'],1000)
+        self.assertEqual(saved['runs'],[])
+
+    def test_window_reader_never_contacts_ssh(self):
+        with patch.object(run,'local_ai_work_logs',return_value=[]) as reader:
+            self.assertEqual(run._read_task_sync_window([{'id':'remote','hostId':'ssh-old'}],1,2),[])
+            reader.assert_not_called()
+
     def test_execution_receipt_keeps_comment_ids_and_rejects_unconfirmed_items(self):
         batch = self.create_run()
         payload = {**self.payload, "linearUpdates": [{

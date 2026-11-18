@@ -31,6 +31,7 @@
   const executionResultText = document.querySelector("#executionResultText");
   const toast = document.querySelector("#toast");
   const sourceSearch = document.querySelector("#sourceSearch");
+  const sourceProvider = document.querySelector("#sourceProvider");
   const sourceThreadList = document.querySelector("#sourceThreadList");
   const sourceSelectionSummary = document.querySelector("#sourceSelectionSummary");
   const toggleSourcesButton = document.querySelector("#toggleSourcesButton");
@@ -44,6 +45,7 @@
   let sourceThreads = [];
   let selectedSourceRefs = new Set();
   let sourcesInitialized = false;
+  let windowStartDirty = false;
   let activeRunId = sessionStorage.getItem("task-sync-active-run") || "";
   let loading = false;
   let pollTimer = 0;
@@ -120,7 +122,7 @@
 
   function managerThread() {
     return managerThreads.find((thread) => thread.id === state?.managerThreadId)
-      || (state?.managerThreadId ? {id: state.managerThreadId, name: state.managerThreadName} : null)
+      || (state?.managerThreadId && !state.managerThreadId.startsWith("claude-") && !state.managerThreadId.includes("::") ? {id: state.managerThreadId, name: state.managerThreadName} : null)
       || managerThreads[0]
       || null;
   }
@@ -138,8 +140,9 @@
 
   function visibleSourceThreads() {
     const query = sourceSearch.value.trim().toLocaleLowerCase();
-    if (!query) return sourceThreads;
-    return sourceThreads.filter((thread) => `${thread.name || ""} ${thread.preview || ""} ${thread.sourceLabel || ""}`.toLocaleLowerCase().includes(query));
+    return sourceThreads.filter((thread) =>
+      (sourceProvider.value === "all" || (thread.id.startsWith("claude-") ? "claude" : "codex") === sourceProvider.value) &&
+      `${thread.name || ""} ${thread.preview || ""} ${thread.sourceLabel || ""} ${thread.cwd || ""}`.toLocaleLowerCase().includes(query));
   }
 
   function renderSourceThreads() {
@@ -161,9 +164,9 @@
 
   function renderWindow() {
     const start = state?.lastTriggeredAt || firstWindowStart();
-    if (!windowStartInput.matches(":focus")) windowStartInput.value = toLocalInputValue(start);
+    if (!windowStartDirty && !windowStartInput.matches(":focus")) windowStartInput.value = toLocalInputValue(start);
     windowDescription.textContent = state?.lastTriggeredAt
-      ? `默认从上次点击 ${formatDateTime(state.lastTriggeredAt)} 开始。`
+      ? `默认从上次收集 ${formatDateTime(state.lastTriggeredAt)} 开始，新加入的对话也会补读这个时间之后的内容。`
       : "首次默认从今天 00:00 开始，可临时修改。";
   }
 
@@ -393,10 +396,10 @@
   async function loadSources() {
     try {
       const result = await request("/api/codex/threads");
-      sourceThreads = (result.threads || []).sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+      sourceThreads = (result.threads || []).filter((thread) => !thread.hostId || thread.hostId === "local").sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
       managerThreads = sourceThreads.filter((thread) => thread.hostId === "local" && thread.provider !== "claude");
       if (!sourcesInitialized) {
-        selectedSourceRefs = new Set(Array.isArray(state?.selectedSourceRefs) ? state.selectedSourceRefs : sourceThreads.map(sourceRef));
+        selectedSourceRefs = new Set((Array.isArray(state?.selectedSourceRefs) ? state.selectedSourceRefs : sourceThreads.map(sourceRef)).filter((ref) => !ref.includes("::")));
         sourcesInitialized = true;
       }
       render();
@@ -428,7 +431,7 @@
     const manager = managerThread();
     if (!manager) return showToast("没有找到可用的本机统管对话");
     if (!selectedSourceRefs.size) return showToast("请至少勾选一条需要统计的对话");
-    const since = new Date(windowStartInput.value).getTime();
+    const since = !windowStartDirty && state?.lastTriggeredAt ? state.lastTriggeredAt : new Date(windowStartInput.value).getTime();
     if (!Number.isFinite(since)) return showToast("请选择有效的同步起点");
     loading = true;
     analyzeButton.disabled = true;
@@ -441,6 +444,7 @@
         since,
       });
       activeRunId = result.run.id;
+      windowStartDirty = false;
       sessionStorage.setItem("task-sync-active-run", activeRunId);
       await loadState({ quiet: true });
       await copyRequest("analysis");
@@ -544,6 +548,8 @@
     render();
   });
   sourceSearch.addEventListener("input", renderSourceThreads);
+  sourceProvider.addEventListener("change", renderSourceThreads);
+  windowStartInput.addEventListener("input", () => { windowStartDirty = true; });
   sourceThreadList.addEventListener("change", (event) => {
     if (!event.target.matches('input[type="checkbox"]')) return;
     if (event.target.checked) selectedSourceRefs.add(event.target.value);
