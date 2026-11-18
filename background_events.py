@@ -117,6 +117,8 @@ class BackgroundEventMonitor:
             if not thread_id:
                 continue
             host_id = str(card.get("codexHost") or "local").strip()
+            if host_id != "local":
+                continue
             ref = _thread_ref(host_id, thread_id)
             if ref in seen:
                 continue

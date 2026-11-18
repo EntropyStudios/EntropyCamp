@@ -46,7 +46,7 @@ function loadCards() {
     const saved = JSON.parse(businessState.getItem(STORAGE_KEY) || "[]");
     return Array.isArray(saved)
       ? saved
-          .filter((card) => card && card.codexThreadId)
+          .filter((card) => card && card.codexThreadId && (!card.codexHost || card.codexHost === "local"))
           .map((card) => ({
             ...card,
             codexHost: typeof card.codexHost === "string" && /^ssh-[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(card.codexHost)

@@ -1990,7 +1990,7 @@ console.log(JSON.stringify({ sorted, original: cards.map((card) => card.id) }));
             index.index('<script src="app.js"></script>'),
         )
         self.assertIn("const cardOrderCore = window.CardOrderCore;", app)
-        self.assertIn("const sorted = cardOrderCore.sortCards(cards, {", app)
+        self.assertIn('const sorted = cardOrderCore.sortCards(cards.filter((card) => !card.codexHost || card.codexHost === "local"), {', app)
 
 
 class GraphLayoutTests(unittest.TestCase):
@@ -2565,7 +2565,7 @@ console.log(JSON.stringify(choices));
             self.assertIn(f'id="{element_id}"', html)
         self.assertIn('const WORK_HISTORY_KEY = "lumen-reminder-work-history-v1";', app)
         self.assertIn("conversations: selectedWorkConversations()", app)
-        self.assertIn("return workHistoryCore.groupConversationChoices(cards, workSession.countsByCardId);", app)
+        self.assertIn('workHistoryCore.groupConversationChoices(cards.filter((card) => !card.codexHost || card.codexHost === "local"), workSession.countsByCardId)', app)
         self.assertIn('id="reportBackLink"', (project_root / "work-log.html").read_text(encoding="utf-8"))
         work_log = (project_root / "work-log.js").read_text(encoding="utf-8")
         self.assertIn("loadHistoricalContext()", work_log)
