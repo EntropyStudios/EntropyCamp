@@ -1647,14 +1647,14 @@ function updateBigBenClock(date = new Date(), force = false) {
   if (force || state.beat !== bigBenLastBeat) {
     bigBenMinuteAngle = unwrapClockAngle(bigBenMinuteAngle, state.minuteAngle);
     bigBenHourAngle = unwrapClockAngle(bigBenHourAngle, state.hourAngle);
-    corpusClock.style.setProperty("--bb-minute-angle", `${bigBenMinuteAngle.toFixed(6)}deg`);
-    corpusClock.style.setProperty("--bb-hour-angle", `${bigBenHourAngle.toFixed(6)}deg`);
+    setHeaderClockStyle("--bb-minute-angle", `${bigBenMinuteAngle.toFixed(6)}deg`);
+    setHeaderClockStyle("--bb-hour-angle", `${bigBenHourAngle.toFixed(6)}deg`);
     bigBenMinuteHand?.setAttribute("data-angle", state.minuteAngle.toFixed(6));
     bigBenHourHand?.setAttribute("data-angle", state.hourAngle.toFixed(6));
     bigBenLastBeat = state.beat;
   }
-  corpusClock.style.setProperty("--bb-beat-pulse", beatPulse.toFixed(4));
-  corpusClock.style.setProperty("--bb-chime-strength", chimeStrength.toFixed(4));
+  setHeaderClockStyle("--bb-beat-pulse", beatPulse.toFixed(4));
+  setHeaderClockStyle("--bb-chime-strength", chimeStrength.toFixed(4));
   if (force || state.night !== bigBenLastNight) {
     bigBenClock.classList.toggle("is-night", state.night);
     bigBenClock.dataset.period = state.night ? "night" : "day";
@@ -2138,11 +2138,11 @@ function updatePragueOrlojClock(date = new Date(), force = false) {
       pragueOrlojCalendarAngle,
       state.calendarAngle,
     );
-    corpusClock.style.setProperty("--orloj-zodiac-angle", `${pragueOrlojZodiacAngle.toFixed(6)}deg`);
-    corpusClock.style.setProperty("--orloj-sun-angle", `${pragueOrlojSunAngle.toFixed(6)}deg`);
-    corpusClock.style.setProperty("--orloj-moon-angle", `${pragueOrlojMoonAngle.toFixed(6)}deg`);
-    corpusClock.style.setProperty("--orloj-old-czech-angle", `${pragueOrlojOldCzechAngle.toFixed(6)}deg`);
-    corpusClock.style.setProperty("--orloj-calendar-angle", `${pragueOrlojCalendarAngle.toFixed(6)}deg`);
+    setHeaderClockStyle("--orloj-zodiac-angle", `${pragueOrlojZodiacAngle.toFixed(6)}deg`);
+    setHeaderClockStyle("--orloj-sun-angle", `${pragueOrlojSunAngle.toFixed(6)}deg`);
+    setHeaderClockStyle("--orloj-moon-angle", `${pragueOrlojMoonAngle.toFixed(6)}deg`);
+    setHeaderClockStyle("--orloj-old-czech-angle", `${pragueOrlojOldCzechAngle.toFixed(6)}deg`);
+    setHeaderClockStyle("--orloj-calendar-angle", `${pragueOrlojCalendarAngle.toFixed(6)}deg`);
     const sunPoint = pragueOrlojPolar(state.sunRadius, state.sunAngle);
     const moonPoint = pragueOrlojPolar(state.moonRadius, state.moonAngle);
     pragueOrlojSunSymbol?.setAttribute(
@@ -2179,10 +2179,10 @@ function updatePragueOrlojClock(date = new Date(), force = false) {
   const automaton = reduceMotion
     ? { ...state.automaton, windowOpen: 0, procession: 0, bellPulse: 0, roosterPulse: 0, figurePulse: 0 }
     : state.automaton;
-  corpusClock.style.setProperty("--orloj-window-open", automaton.windowOpen.toFixed(4));
-  corpusClock.style.setProperty("--orloj-automaton", automaton.figurePulse.toFixed(4));
-  corpusClock.style.setProperty("--orloj-bell-pulse", automaton.bellPulse.toFixed(4));
-  corpusClock.style.setProperty("--orloj-rooster-pulse", automaton.roosterPulse.toFixed(4));
+  setHeaderClockStyle("--orloj-window-open", automaton.windowOpen.toFixed(4));
+  setHeaderClockStyle("--orloj-automaton", automaton.figurePulse.toFixed(4));
+  setHeaderClockStyle("--orloj-bell-pulse", automaton.bellPulse.toFixed(4));
+  setHeaderClockStyle("--orloj-rooster-pulse", automaton.roosterPulse.toFixed(4));
   const processionOffset = automaton.procession * 820;
   pragueOrlojLeftApostles?.setAttribute("transform", `translate(${-processionOffset.toFixed(3)} 0)`);
   pragueOrlojRightApostles?.setAttribute("transform", `translate(${-processionOffset.toFixed(3)} 0)`);
@@ -2520,29 +2520,29 @@ function updateBernZytgloggeClock(date = new Date(), force = false) {
       bernZytgloggeCalendarAngle,
       state.calendarAngle,
     );
-    corpusClock.style.setProperty(
+    setHeaderClockStyle(
       "--zyt-main-hour-angle",
       `${bernZytgloggeMainHourAngle.toFixed(6)}deg`,
     );
-    corpusClock.style.setProperty(
+    setHeaderClockStyle(
       "--zyt-main-hour-counter-angle",
       `${(-bernZytgloggeMainHourAngle).toFixed(6)}deg`,
     );
-    corpusClock.style.setProperty(
+    setHeaderClockStyle(
       "--zyt-main-minute-angle",
       `${bernZytgloggeMainMinuteAngle.toFixed(6)}deg`,
     );
-    corpusClock.style.setProperty("--zyt-sun-angle", `${bernZytgloggeSunAngle.toFixed(6)}deg`);
-    corpusClock.style.setProperty(
+    setHeaderClockStyle("--zyt-sun-angle", `${bernZytgloggeSunAngle.toFixed(6)}deg`);
+    setHeaderClockStyle(
       "--zyt-zodiac-angle",
       `${bernZytgloggeZodiacAngle.toFixed(6)}deg`,
     );
-    corpusClock.style.setProperty("--zyt-moon-angle", `${bernZytgloggeMoonAngle.toFixed(6)}deg`);
-    corpusClock.style.setProperty(
+    setHeaderClockStyle("--zyt-moon-angle", `${bernZytgloggeMoonAngle.toFixed(6)}deg`);
+    setHeaderClockStyle(
       "--zyt-calendar-angle",
       `${bernZytgloggeCalendarAngle.toFixed(6)}deg`,
     );
-    corpusClock.style.setProperty(
+    setHeaderClockStyle(
       "--zyt-moon-illumination",
       state.lunarIllumination.toFixed(6),
     );
@@ -2599,31 +2599,31 @@ function updateBernZytgloggeClock(date = new Date(), force = false) {
       bellPulse: 0,
     }
     : state.automaton;
-  corpusClock.style.setProperty("--zyt-rooster-pulse", automaton.roosterPulse.toFixed(4));
-  corpusClock.style.setProperty("--zyt-bear-parade", automaton.bearParade.toFixed(4));
-  corpusClock.style.setProperty("--zyt-jester-angle", `${automaton.jesterAngle.toFixed(4)}deg`);
-  corpusClock.style.setProperty(
+  setHeaderClockStyle("--zyt-rooster-pulse", automaton.roosterPulse.toFixed(4));
+  setHeaderClockStyle("--zyt-bear-parade", automaton.bearParade.toFixed(4));
+  setHeaderClockStyle("--zyt-jester-angle", `${automaton.jesterAngle.toFixed(4)}deg`);
+  setHeaderClockStyle(
     "--zyt-jester-left-angle",
     `${automaton.jesterLeftAngle.toFixed(4)}deg`,
   );
-  corpusClock.style.setProperty(
+  setHeaderClockStyle(
     "--zyt-jester-right-angle",
     `${automaton.jesterRightAngle.toFixed(4)}deg`,
   );
-  corpusClock.style.setProperty("--zyt-quarter-pulse", automaton.quarterPulse.toFixed(4));
-  corpusClock.style.setProperty("--zyt-chronos-angle", `${automaton.chronosAngle.toFixed(4)}deg`);
-  corpusClock.style.setProperty(
+  setHeaderClockStyle("--zyt-quarter-pulse", automaton.quarterPulse.toFixed(4));
+  setHeaderClockStyle("--zyt-chronos-angle", `${automaton.chronosAngle.toFixed(4)}deg`);
+  setHeaderClockStyle(
     "--zyt-hourglass-angle",
     `${automaton.hourglassAngle.toFixed(4)}deg`,
   );
   const hourStrikePulse = Math.abs(automaton.jacquemartAngle) / 42;
-  corpusClock.style.setProperty("--zyt-chronos-count", hourStrikePulse.toFixed(4));
-  corpusClock.style.setProperty("--zyt-lion-pulse", hourStrikePulse.toFixed(4));
-  corpusClock.style.setProperty(
+  setHeaderClockStyle("--zyt-chronos-count", hourStrikePulse.toFixed(4));
+  setHeaderClockStyle("--zyt-lion-pulse", hourStrikePulse.toFixed(4));
+  setHeaderClockStyle(
     "--zyt-jacquemart-angle",
     `${automaton.jacquemartAngle.toFixed(4)}deg`,
   );
-  corpusClock.style.setProperty("--zyt-bell-pulse", automaton.bellPulse.toFixed(4));
+  setHeaderClockStyle("--zyt-bell-pulse", automaton.bellPulse.toFixed(4));
   bernZytgloggeClock.classList.toggle(
     "is-mechanism-active",
     state.automaton.active && !reduceMotion,
@@ -3487,9 +3487,9 @@ function updateCorpusClock(now = performance.now()) {
   corpusClock.dataset.engagedPallets = actualEngagedPallets.join(",");
   corpusClock.dataset.dualContact = String(actualEngagedPallets.length === 2);
   corpusClock.dataset.reducedMotion = String(shouldReduceMotion());
-  corpusClock.style.setProperty("--cc-body-angle", `${state.bodyAngle.toFixed(3)}deg`);
-  corpusClock.style.setProperty("--cc-body-lift", `${state.bodyLift.toFixed(3)}px`);
-  corpusClock.style.setProperty("--cc-wheel-angle", `${state.wheelAngle.toFixed(3)}deg`);
+  setHeaderClockStyle("--cc-body-angle", `${state.bodyAngle.toFixed(3)}deg`);
+  setHeaderClockStyle("--cc-body-lift", `${state.bodyLift.toFixed(3)}px`);
+  setHeaderClockStyle("--cc-wheel-angle", `${state.wheelAngle.toFixed(3)}deg`);
   const normalizedWheelAngle = positiveModulo(state.wheelAngle, 360);
   const wholeWheelStep = Math.floor(state.wheelAngle / CORPUS_ESCAPE_TOOTH_ANGLE);
   if (corpusEscapeWheel) {
@@ -3497,9 +3497,9 @@ function updateCorpusClock(now = performance.now()) {
     corpusEscapeWheel.dataset.angleNormalized = normalizedWheelAngle.toFixed(3);
     corpusEscapeWheel.dataset.step = String(wholeWheelStep);
   }
-  corpusClock.style.setProperty("--cc-jaw-angle", `${state.jawAngle.toFixed(3)}deg`);
-  corpusClock.style.setProperty("--cc-tail-angle", `${state.tailAngle.toFixed(3)}deg`);
-  corpusClock.style.setProperty("--cc-pendulum-angle", `${state.pendulumAngle.toFixed(3)}deg`);
+  setHeaderClockStyle("--cc-jaw-angle", `${state.jawAngle.toFixed(3)}deg`);
+  setHeaderClockStyle("--cc-tail-angle", `${state.tailAngle.toFixed(3)}deg`);
+  setHeaderClockStyle("--cc-pendulum-angle", `${state.pendulumAngle.toFixed(3)}deg`);
   renderCorpusPallet("front", state, palletPoses.front);
   renderCorpusPallet("rear", state, palletPoses.rear);
   renderCorpusContactLips(state, palletPoses);
@@ -3520,7 +3520,7 @@ function updateCorpusClock(now = performance.now()) {
     corpusEscapeTeeth.dataset.contactIndices = contactIndices.join(",");
     delete corpusEscapeTeeth.dataset.contactIndex;
   }
-  if (corpusClockTime) {
+  if (corpusClockTime && corpusClockTime.textContent !== state.label) {
     corpusClockTime.textContent = state.label;
     corpusClockTime.dateTime = state.clockTime;
   }
@@ -3567,11 +3567,34 @@ const HEADER_CLOCK_RUNTIMES = {
   },
 };
 
+function setHeaderClockStyle(name, value) {
+  // Limit inherited custom-property invalidation to the relevant SVG, rather
+  // than all four detailed clock trees. Skip setters when the value is stable.
+  const target = name.startsWith("--cc-") ? corpusClockSkin
+    : name.startsWith("--bb-") ? bigBenClock
+      : name.startsWith("--orloj-") ? pragueOrlojClock
+        : name.startsWith("--zyt-") ? bernZytgloggeClock : corpusClock;
+  if (target && target.style.getPropertyValue(name) !== value) target.style.setProperty(name, value);
+}
+
+function headerClockFrameInterval(date = corpusClockRenderDate()) {
+  // These faces tick once per second between automaton performances. Their
+  // minute-hand CSS transitions and decorative CSS animations run independently.
+  if (activeHeaderClockId === "prague-orloj" || activeHeaderClockId === "bern-zytglogge") {
+    const parts = displayTimeParts(date);
+    const mechanism = activeHeaderClockId === "prague-orloj"
+      ? pragueOrlojAutomatonState(parts)
+      : bernZytgloggeAutomatonState(parts);
+    if (!mechanism.active || shouldReduceMotion()) return 1000;
+  }
+  return HEADER_CLOCK_FRAME_INTERVAL_MS;
+}
+
 function scheduleCorpusClockFrame(now = null) {
   if (corpusClockAnimationFrame !== null || corpusClockAnimationTimer !== null) return;
   const wait = now === null || corpusClockLastFrameAt === null
     ? 0
-    : Math.max(0, HEADER_CLOCK_FRAME_INTERVAL_MS - (now - corpusClockLastFrameAt) - HEADER_CLOCK_WAKE_AHEAD_MS);
+    : Math.max(0, headerClockFrameInterval() - (now - corpusClockLastFrameAt) - HEADER_CLOCK_WAKE_AHEAD_MS);
   if (wait <= 0) {
     corpusClockAnimationFrame = requestAnimationFrame(runCorpusClockFrame);
     return;
@@ -3586,11 +3609,13 @@ function scheduleCorpusClockFrame(now = null) {
 
 function runCorpusClockFrame(now) {
   corpusClockAnimationFrame = null;
-  if (corpusClockLastFrameAt === null || now - corpusClockLastFrameAt >= HEADER_CLOCK_FRAME_INTERVAL_MS - 0.5) {
+  if (document.visibilityState === "hidden") return;
+  const date = corpusClockRenderDate();
+  if (corpusClockLastFrameAt === null || now - corpusClockLastFrameAt >= headerClockFrameInterval(date) - 0.5) {
     corpusClockLastFrameAt = now;
     HEADER_CLOCK_RUNTIMES[activeHeaderClockId]?.frame({
       now,
-      date: corpusClockRenderDate(),
+      date,
     });
   }
   scheduleCorpusClockFrame(now);
