@@ -4222,7 +4222,7 @@ function bubbleMarkup(card, now = Date.now(), modelKeys = new Map()) {
   const phaseStart = card.codexActivityStartedAt || (due ? card.codexLatestCompletedAt : null);
   const runtime = formatElapsedSince(phaseStart, now);
   const cardActionable = workSession.active && (due || state === "idle");
-  const hostLabel = card.codexHost && card.codexHost !== "local" ? "SSH" : card.codexThreadId?.startsWith("claude-") ? "Claude Code" : "本机";
+  const hostLabel = card.codexHost && card.codexHost !== "local" ? "SSH" : card.codexThreadId?.startsWith("claude-") ? "Claude Code" : "Codex";
   const effort = isGraphThreadActive(card) ? reasoningEffortLabel(card.codexReasoningEffort) : "";
   const statusText = linked
     ? due ? "有新回复" : state === "processing" ? "处理中" : "保持关注"
@@ -4251,7 +4251,8 @@ function reminderCardMarkup(card, now, { focus = false, compact = false } = {}) 
   const linked = Boolean(card.codexThreadId);
   const due = state === "due";
   const actionable = workSession.active && (due || rawState === "idle");
-  const hostLabel = card.codexHost && card.codexHost !== "local" ? "SSH" : card.codexThreadId?.startsWith("claude-") ? "Claude Code" : "本机";
+  const provider = linked ? (card.codexThreadId.startsWith("claude-") ? "claude" : "codex") : "timer";
+  const hostLabel = card.codexHost && card.codexHost !== "local" ? "SSH" : provider === "claude" ? "Claude Code" : "Codex";
   const phaseStartedAt = Number(card.codexActivityStartedAt) || null;
   const runtime = formatElapsedSince(phaseStartedAt, now);
   const stateClass = due ? "due" : linked ? (rawState === "codex-paused" ? "paused" : "codex") : rawState;
@@ -4271,10 +4272,11 @@ function reminderCardMarkup(card, now, { focus = false, compact = false } = {}) 
           ? "现在"
           : formatCountdown(card.nextAt);
   const source = linked
-    ? [hostLabel, card.codexModel ? modelDisplayLabel(card.codexModel) : "Codex"].join(" · ")
+    ? [hostLabel, card.codexModel ? modelDisplayLabel(card.codexModel) : ""].filter(Boolean).join(" · ")
     : card.tag || "提醒";
   const classes = [
     "card",
+    `provider-${provider}`,
     `is-${stateClass}`,
     state === "processing" ? "is-processing" : "",
     focus ? "is-focus" : "",
