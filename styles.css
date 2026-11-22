@@ -4122,6 +4122,28 @@ main {
 .card-grid.card-mode .card.is-processing { border-color:rgba(110,180,236,.5); }
 .card-grid.card-mode .card.is-processing .countdown { font-size:20px; color:#a2d3f5; }
 
+/* Provider accents apply only to AI cards; timer reminders keep their palette. */
+.card-grid.card-mode .card.provider-codex { --provider-accent: #a9d9fc; --provider-rgb: 169, 217, 252; }
+.card-grid.card-mode .card.provider-claude { --provider-accent: #ffd0a6; --provider-rgb: 255, 208, 166; }
+.card-grid.card-mode .card:is(.provider-codex, .provider-claude):not(.is-due) {
+  border-color: rgba(var(--provider-rgb), .3);
+  background: linear-gradient(145deg, rgba(var(--provider-rgb), .11), rgba(var(--provider-rgb), .025) 65%), #101114;
+}
+.card-grid.card-mode .card:is(.provider-codex, .provider-claude):not(.is-due) .tag {
+  color: var(--provider-accent);
+  border-color: rgba(var(--provider-rgb), .25);
+  background: rgba(var(--provider-rgb), .09);
+}
+.card-grid.card-mode .card:is(.provider-codex, .provider-claude).is-processing {
+  border-color: rgba(var(--provider-rgb), .65);
+}
+.card-grid.card-mode .card:is(.provider-codex, .provider-claude).is-processing .countdown { color: var(--provider-accent); }
+.card-grid.card-mode .card:is(.provider-codex, .provider-claude).is-due {
+  background: linear-gradient(145deg, #fff, rgba(255, 255, 255, .25) 65%), var(--provider-accent);
+  border-color: rgba(var(--provider-rgb), .9);
+  box-shadow: inset 0 1px 0 #fff, 0 0 30px rgba(var(--provider-rgb), .16), 0 24px 65px rgba(0, 0, 0, .42);
+}
+
 .card.is-idle {
   cursor: pointer;
 }
