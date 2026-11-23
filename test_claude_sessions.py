@@ -14,6 +14,7 @@ class ClaudeSessionsTests(unittest.TestCase):
         import run
         self.append('user',1,'Claude task')
         with patch.object(run.CODEX_BRIDGE,'list_threads',side_effect=RuntimeError('offline')), \
+             patch.object(run.DEEPSEEK_SESSIONS,'list_threads',return_value=[]), \
              patch.object(run.CODEX_MONITOR,'list_threads',side_effect=RuntimeError('offline')), \
              patch.object(run,'CLAUDE_SESSIONS',self.client), \
              patch.object(run,'REMOTE_CODEX_BRIDGES',{'ssh-test': unittest.mock.Mock()}):

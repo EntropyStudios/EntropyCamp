@@ -27,6 +27,7 @@ from background_events import BackgroundEventMonitor
 from ai_discovery import AIDiscovery, milliseconds
 from codex_monitor import CodexRolloutMonitor, CodexStateUnavailable
 from claude_sessions import ClaudeSessions, is_claude
+from deepseek_sessions import DeepSeekSessions, is_deepseek
 from feishu_notify import FeishuNotificationError, FeishuNotifier
 from performance_client import PerformanceClient, PerformanceError
 from runtime_monitor import RuntimeMonitor
@@ -1057,14 +1058,22 @@ CODEX_BRIDGE = CodexBridge()
 CODEX_MONITOR = CodexRolloutMonitor(CODEX_HOME)
 CODEX_WORK_LOGS = CodexWorkLogReader(CODEX_MONITOR, CODEX_BRIDGE)
 CLAUDE_SESSIONS = ClaudeSessions(Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude")))
+DEEPSEEK_SESSIONS = DeepSeekSessions(Path(os.environ.get('DSH_HOME', Path.home() / '.dsh')))
+
+
+def is_non_codex(identifier):
+    return is_claude(identifier) or is_deepseek(identifier)
 
 
 def local_ai_work_logs(thread_ids, since=None, until=None, include_process=True):
-    codex_ids = [i for i in thread_ids if not is_claude(i)]
+    codex_ids = [i for i in thread_ids if not is_non_codex(i)]
     claude_ids = [i for i in thread_ids if is_claude(i)]
     rows = CODEX_WORK_LOGS.work_logs(codex_ids, since, until, include_process) if codex_ids else []
     if claude_ids:
         rows.extend(CLAUDE_SESSIONS.work_logs(claude_ids, since, until, include_process))
+    deepseek_ids = [i for i in thread_ids if is_deepseek(i)]
+    if deepseek_ids:
+        rows.extend(DEEPSEEK_SESSIONS.work_logs(deepseek_ids, since, until, include_process))
     by_id = {r["id"]: r for r in rows}
     return [by_id[i] for i in thread_ids if i in by_id]
 
@@ -1180,6 +1189,7 @@ def list_all_codex_threads() -> list[dict[str, Any]]:
         threads.extend(CLAUDE_SESSIONS.list_threads())
     except OSError:
         pass  # A missing Claude directory must not hide local Codex sessions.
+    threads.extend(DEEPSEEK_SESSIONS.list_threads())
     return threads
 
 
@@ -1188,7 +1198,7 @@ def discover_local_ai_threads():
     codex = [row for row in CODEX_MONITOR.list_threads(limit=100000, include_archived=True)
              if '"subagent"' not in str(row.get('source') or '')]
     claude = CLAUDE_SESSIONS.list_threads(limit=100000)
-    return [{**row, 'hostId': 'local', 'provider': 'codex', 'sourceLabel': 'Codex · 本机'} for row in codex] + claude
+    return [{**row, 'hostId': 'local', 'provider': 'codex', 'sourceLabel': 'Codex · 本机'} for row in codex] + claude + DEEPSEEK_SESSIONS.list_threads(limit=100000)
 
 
 def task_sync_candidates(since_ms, until_ms):
@@ -1201,7 +1211,7 @@ def task_sync_candidates(since_ms, until_ms):
         if logs:
             candidates.append(row)
     return {'available': True, 'threads': candidates,
-            'managerThreads': [row for row in threads if not is_claude(row['id'])],
+            'managerThreads': [row for row in threads if not is_non_codex(row['id'])],
             'since': since_ms, 'until': until_ms}
 
 
@@ -1229,7 +1239,7 @@ def save_task_sync_settings(
                 for thread in list_all_codex_threads()
                 if thread.get("hostId") == "local"
                 and thread.get("id") == manager_thread_id
-                and not is_claude(manager_thread_id)
+                and not is_non_codex(manager_thread_id)
             ),
             None,
         )
@@ -1321,7 +1331,7 @@ def _read_task_sync_window(
                     **row,
                     "hostId": host_id,
                     "sourceLabel": source.get("sourceLabel") or host_id,
-                    "provider": "claude" if is_claude(thread_id) else "codex",
+                    "provider": "deepseek" if is_deepseek(thread_id) else "claude" if is_claude(thread_id) else "codex",
                     "cwd": source.get("cwd") or "",
                 }
             )
@@ -1485,7 +1495,7 @@ def start_task_sync_analysis(
         (
             thread
             for thread in known_threads
-            if thread.get("hostId") == "local" and thread.get("id") == manager_thread_id and not is_claude(manager_thread_id)
+            if thread.get("hostId") == "local" and thread.get("id") == manager_thread_id and not is_non_codex(manager_thread_id)
         ),
         None,
     )
@@ -1810,7 +1820,10 @@ def codex_statuses(refs: list[dict[str, str]]) -> list[dict[str, Any]]:
             claude_ids = [identifier for identifier in thread_ids if is_claude(identifier)]
             for status in CLAUDE_SESSIONS.thread_statuses(claude_ids):
                 statuses_by_key[(host_id, status["id"])] = status
-            thread_ids = [identifier for identifier in thread_ids if not is_claude(identifier)]
+            deepseek_ids = [identifier for identifier in thread_ids if is_deepseek(identifier)]
+            for status in DEEPSEEK_SESSIONS.thread_statuses(deepseek_ids):
+                statuses_by_key[(host_id, status['id'])] = status
+            thread_ids = [identifier for identifier in thread_ids if not is_non_codex(identifier)]
             if not thread_ids:
                 continue
         bridge = CODEX_BRIDGE if host_id == "local" else REMOTE_CODEX_BRIDGES.get(host_id)
@@ -2102,7 +2115,7 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
             ref if isinstance(ref, dict) else {"hostId": "local", "id": str(ref), "ref": str(ref)}
             for ref in refs
         ]
-        thread_ids = [ref["id"] for ref in refs if ref["hostId"] == "local" and not is_claude(ref["id"])]
+        thread_ids = [ref["id"] for ref in refs if ref["hostId"] == "local" and not is_non_codex(ref["id"])]
         if not thread_ids:
             self._json_response({"available": False, "error": "没有关联的 Codex 对话"}, 400)
             return
@@ -2217,7 +2230,7 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
                 manager_threads = [
                     thread
                     for thread in all_threads
-                    if thread.get("hostId") == "local" and not is_claude(thread.get("id"))
+                    if thread.get("hostId") == "local" and not is_non_codex(thread.get("id"))
                 ]
                 self._json_response(
                     {
