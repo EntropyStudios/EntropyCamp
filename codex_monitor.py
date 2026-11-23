@@ -118,8 +118,8 @@ class CodexRolloutMonitor:
         if thread and thread.is_alive():
             thread.join(timeout=max(1.0, self.poll_interval * 3))
 
-    def list_threads(self, limit: int = 100) -> list[dict[str, Any]]:
-        records = self._read_thread_records()
+    def list_threads(self, limit: int = 100, *, include_archived: bool = False) -> list[dict[str, Any]]:
+        records = self._read_thread_records(include_archived=include_archived)
         records.sort(key=lambda record: record["sortKey"], reverse=True)
         return [
             {
@@ -130,6 +130,7 @@ class CodexRolloutMonitor:
                 "model": record["model"],
                 "reasoningEffort": record["reasoningEffort"],
                 "cwd": record["cwd"],
+                "source": record.get("source") or "",
             }
             for record in records[: max(1, limit)]
         ]
@@ -265,6 +266,7 @@ class CodexRolloutMonitor:
                         "model",
                         "reasoning_effort",
                         "cwd",
+                        "source",
                     )
                     if column in columns
                 ]
@@ -306,6 +308,7 @@ class CodexRolloutMonitor:
                     "model": values.get("model") or "",
                     "reasoningEffort": values.get("reasoning_effort") or "",
                     "cwd": values.get("cwd") or "",
+                    "source": values.get("source") or "",
                 }
             )
         return records
@@ -313,7 +316,7 @@ class CodexRolloutMonitor:
     def _ensure_threads(self, thread_ids: list[str]) -> None:
         if not thread_ids:
             return
-        records = {record["id"]: record for record in self._read_thread_records(thread_ids)}
+        records = {record["id"]: record for record in self._read_thread_records(thread_ids, include_archived=True)}
         initialized: dict[str, _ThreadState] = {}
         with self._condition:
             missing_or_changed = [

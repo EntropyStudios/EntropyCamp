@@ -193,7 +193,7 @@ class ClaudeSessions:
                 turns[-1]["status"] = "interrupted"
             result.update(status="idle", phase="idle", phaseLabel="保持关注", toolKind="", activityStartedAt=None)
 
-    def list_threads(self):
+    def list_threads(self, limit=200):
         with self.lock:
             self._discover()
             rows = []
@@ -201,7 +201,7 @@ class ClaudeSessions:
                 row = self._read(identifier)
                 if row["turns"]:
                     rows.append({k: v for k, v in row.items() if k not in {"turns", "customTitle"}})
-            return sorted(rows, key=lambda r: r.get("updatedAt") or 0, reverse=True)[:200]
+            return sorted(rows, key=lambda r: r.get("updatedAt") or 0, reverse=True)[:limit]
 
     def thread_statuses(self, identifiers):
         with self.lock:

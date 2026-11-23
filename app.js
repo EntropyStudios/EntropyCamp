@@ -3891,7 +3891,7 @@ function workCompletionBreakdown() {
 }
 
 function workConversationChoices() {
-  return workHistoryCore.groupConversationChoices(cards.filter((card) => !card.codexHost || card.codexHost === "local"), workSession.countsByCardId);
+  return workHistoryCore.groupConversationChoices(cards.filter((card) => !card.codexHost || card.codexHost === "local"), workSession.countsByCardId).filter((row) => cards.some((card) => card.codexThreadId === row.threadId && !card.aiHidden));
 }
 
 function syncWorkReflectionThreadSelection() {
@@ -4060,6 +4060,7 @@ function widgetSnapshotProjection(now = Date.now()) {
   const currentTemperature = Number(currentWeather?.temperature_2m);
   const reminders = cardOrderCore
     .sortCards(cards.filter((card) => !card.codexHost || card.codexHost === "local"), { workActive: workSession.active, now })
+    .filter((card) => !card.aiHidden)
     .slice(0, 4)
     .map((card) => ({
       title: card.title,
@@ -4621,7 +4622,7 @@ function render(options = {}) {
   const sorted = cardOrderCore.sortCards(cards.filter((card) => !card.codexHost || card.codexHost === "local"), {
     workActive: workSession.active,
     now,
-  });
+  }).filter((card) => !card.aiHidden);
 
   const dueCards = sorted.filter((card) => getCardState(card, now) === "due");
 
@@ -4713,6 +4714,7 @@ function openNewDialog() {
   document.querySelector("#dialogTitle").textContent = "新建提醒";
   document.querySelector("#deleteCardButton").hidden = true;
   populateCodexSelect("", "local");
+  document.querySelector(".codex-field").hidden = true;
   updateReminderMode();
   dialog.showModal();
   loadCodexThreads();
@@ -4723,6 +4725,7 @@ function openEditDialog(id) {
   editingCardsBase = businessState.getItem(STORAGE_KEY);
   const card = cards.find((item) => item.id === id);
   if (!card) return;
+  document.querySelector(".codex-field").hidden = Boolean(card.codexThreadId);
   document.querySelector("#cardId").value = card.id;
   document.querySelector("#cardTitle").value = card.title;
   document.querySelector("#cardTag").value = card.tag || "";
@@ -4731,7 +4734,7 @@ function openEditDialog(id) {
   populateCodexSelect(card.codexThreadId, card.codexHost);
   updateReminderMode();
   document.querySelector("#dialogTitle").textContent = "编辑提醒";
-  document.querySelector("#deleteCardButton").hidden = false;
+  document.querySelector("#deleteCardButton").hidden = Boolean(card.codexThreadId);
   dialog.showModal();
   loadCodexThreads();
 }
@@ -4938,6 +4941,7 @@ async function applyCodexStatuses(threadStatuses = [], options = {}) {
   let workChanged = false;
   const notifications = [];
   linkedCards.forEach((card) => {
+    if (card.aiHidden) return;
     const thread = statuses.get(cardCodexThreadRef(card));
     if (!thread) return;
     if (thread.name && card.codexThreadName !== thread.name) {
@@ -5034,13 +5038,13 @@ async function applyCodexStatuses(threadStatuses = [], options = {}) {
 }
 
 function linkedCodexThreadIds() {
-  return [...new Set(cards.filter((card) => card.codexThreadId && (!card.codexHost || card.codexHost === "local")).map(cardCodexThreadRef))].sort();
+  return [...new Set(cards.filter((card) => !card.aiHidden && card.codexThreadId && (!card.codexHost || card.codexHost === "local")).map(cardCodexThreadRef))].sort();
 }
 
 function refreshCodexEventStream() {
   const threadIds = [...new Set(
     cards
-      .filter((card) => card.codexThreadId && card.codexHost === "local" && !card.codexThreadId.startsWith("claude-"))
+      .filter((card) => !card.aiHidden && card.codexThreadId && card.codexHost === "local" && !card.codexThreadId.startsWith("claude-"))
       .map((card) => card.codexThreadId),
   )].sort();
   const nextKey = threadIds.join("|");
@@ -5083,7 +5087,7 @@ function refreshCodexEventStream() {
 }
 
 async function fetchCodexStatusesForCards(linkedCards) {
-  linkedCards = linkedCards.filter((card) => !card.codexHost || card.codexHost === "local");
+  linkedCards = linkedCards.filter((card) => !card.aiHidden && (!card.codexHost || card.codexHost === "local"));
   if (!linkedCards.length) return [];
   const query = new URLSearchParams();
   [...new Set(linkedCards.map(cardCodexThreadRef))].forEach((ref) => query.append("id", ref));
