@@ -46,6 +46,8 @@
   let selectedSourceRefs = new Set();
   let sourcesInitialized = false;
   let windowStartDirty = false;
+  let sourceRequestVersion = 0;
+  let sourcesLoading = false;
   let activeRunId = sessionStorage.getItem("task-sync-active-run") || "";
   let loading = false;
   let pollTimer = 0;
@@ -376,35 +378,49 @@
     renderRuns();
     renderReview();
     const busy = (state?.runs || []).some((run) => ["analyzing", "executing"].includes(run.status));
-    analyzeButton.disabled = loading || busy || !managerThread() || selectedSourceRefs.size === 0;
+    analyzeButton.disabled = loading || sourcesLoading || busy || !managerThread() || selectedSourceRefs.size === 0;
     schedulePoll((state?.runs || []).some((run) => ["awaiting_analysis", "awaiting_execution", "analyzing", "executing", "failed"].includes(run.status)));
   }
 
   async function loadState({ quiet = false } = {}) {
     try {
       const result = await request("/api/task-sync?stateOnly=1");
+      const changedWindow = state && state.lastTriggeredAt !== result.state.lastTriggeredAt;
       state = result.state;
       if (!state.runs?.some((run) => run.id === activeRunId)) activeRunId = state.runs?.[0]?.id || "";
       sessionStorage.setItem("task-sync-active-run", activeRunId);
       const editing = reviewForm.contains(document.activeElement);
       if (!editing) render();
+      if (changedWindow && sourcesInitialized && !windowStartDirty && !sourcesLoading) loadSources();
     } catch (error) {
       if (!quiet) showToast(error.message || "读取失败");
     }
   }
 
   async function loadSources() {
+    const version = ++sourceRequestVersion;
+    sourcesLoading = true;
+    analyzeButton.disabled = true;
+    sourceSelectionSummary.textContent = "正在筛选时间段内有对话的来源…";
     try {
-      const result = await request("/api/codex/threads");
+      const since = !windowStartDirty && state?.lastTriggeredAt ? state.lastTriggeredAt : new Date(windowStartInput.value).getTime();
+      if (!Number.isFinite(since)) throw new Error("请选择有效的同步起点");
+      const result = await request(`/api/task-sync/candidates?since=${since}&until=${Date.now()}`);
+      if (version !== sourceRequestVersion) return;
       sourceThreads = (result.threads || []).filter((thread) => !thread.hostId || thread.hostId === "local").sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
-      managerThreads = sourceThreads.filter((thread) => thread.hostId === "local" && thread.provider !== "claude");
+      managerThreads = result.managerThreads || [];
       if (!sourcesInitialized) {
-        selectedSourceRefs = new Set((Array.isArray(state?.selectedSourceRefs) ? state.selectedSourceRefs : sourceThreads.map(sourceRef)).filter((ref) => !ref.includes("::")));
+        selectedSourceRefs = new Set((Array.isArray(state?.selectedSourceRefs) ? state.selectedSourceRefs : []).filter((ref) => !ref.includes("::")));
         sourcesInitialized = true;
       }
+      const eligible = new Set(sourceThreads.map(sourceRef));
+      selectedSourceRefs = new Set([...selectedSourceRefs].filter((ref) => eligible.has(ref)));
+      sourcesLoading = false;
       render();
     } catch (error) {
-      sourceSelectionSummary.textContent = "来源列表加载失败，已保存结果仍可审核；点击刷新重试";
+      if (version !== sourceRequestVersion) return;
+      sourceSelectionSummary.textContent = `${error.message || "来源读取失败"}，请刷新重试；未触发收集`;
+      // Remain disabled until a successful retry gives an exact candidate set.
     }
   }
 
@@ -428,6 +444,7 @@
   }
 
   async function startAnalysis() {
+    if (sourcesLoading) return;
     const manager = managerThread();
     if (!manager) return showToast("没有找到可用的本机统管对话");
     if (!selectedSourceRefs.size) return showToast("请至少勾选一条需要统计的对话");
@@ -445,8 +462,10 @@
       });
       activeRunId = result.run.id;
       windowStartDirty = false;
+      sourcesInitialized = false;
       sessionStorage.setItem("task-sync-active-run", activeRunId);
       await loadState({ quiet: true });
+      await loadSources();
       await copyRequest("analysis");
     } catch (error) {
       showToast(error.message || "分析启动失败");
@@ -550,6 +569,7 @@
   sourceSearch.addEventListener("input", renderSourceThreads);
   sourceProvider.addEventListener("change", renderSourceThreads);
   windowStartInput.addEventListener("input", () => { windowStartDirty = true; });
+  windowStartInput.addEventListener("change", () => { sourcesInitialized = false; loadSources(); });
   sourceThreadList.addEventListener("change", (event) => {
     if (!event.target.matches('input[type="checkbox"]')) return;
     if (event.target.checked) selectedSourceRefs.add(event.target.value);

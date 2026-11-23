@@ -43,6 +43,7 @@ class BackgroundEventMonitor:
         clock: Callable[[], float] = time.time,
         poll_interval: float = 1.0,
     ) -> None:
+        self.discovery = None
         self.store = store
         self.status_provider = status_provider
         self.notifier = notifier
@@ -90,13 +91,14 @@ class BackgroundEventMonitor:
             base_session = snapshot["data"][SESSION]
             cards = copy.deepcopy(base_cards)
             session = copy.deepcopy(base_session)
+            discovered = self.discovery.reconcile(cards, int(self.clock() * 1000)) if self.discovery else False
             refs = self._linked_refs(cards)
             statuses = self.status_provider(refs) if refs else []
             changed_cards, changed_session, events = self._reconcile(
                 cards, session, statuses, self.clock()
             )
             updates = {}
-            if changed_cards:
+            if changed_cards or discovered:
                 updates[CARDS] = {"base": base_cards, "value": cards}
             if changed_session:
                 updates[SESSION] = {"base": base_session, "value": session}
@@ -114,6 +116,8 @@ class BackgroundEventMonitor:
         seen: set[str] = set()
         for card in cards:
             thread_id = str(card.get("codexThreadId") or "").strip()
+            if card.get('aiHidden'):
+                continue
             if not thread_id:
                 continue
             host_id = str(card.get("codexHost") or "local").strip()
@@ -147,6 +151,8 @@ class BackgroundEventMonitor:
         events: list[tuple[str, str, dict[str, Any]]] = []
 
         for card in cards:
+            if card.get('aiHidden'):
+                continue
             thread_id = str(card.get("codexThreadId") or "").strip()
             if not thread_id:
                 if (

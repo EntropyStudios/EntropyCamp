@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from background_events import BackgroundEventMonitor
+from ai_discovery import AIDiscovery, milliseconds
 from codex_monitor import CodexRolloutMonitor, CodexStateUnavailable
 from claude_sessions import ClaudeSessions, is_claude
 from feishu_notify import FeishuNotificationError, FeishuNotifier
@@ -1182,6 +1183,28 @@ def list_all_codex_threads() -> list[dict[str, Any]]:
     return threads
 
 
+def discover_local_ai_threads():
+    """Read local indexes only: no app-server or SSH calls during discovery."""
+    codex = [row for row in CODEX_MONITOR.list_threads(limit=100000, include_archived=True)
+             if '"subagent"' not in str(row.get('source') or '')]
+    claude = CLAUDE_SESSIONS.list_threads(limit=100000)
+    return [{**row, 'hostId': 'local', 'provider': 'codex', 'sourceLabel': 'Codex · 本机'} for row in codex] + claude
+
+
+def task_sync_candidates(since_ms, until_ms):
+    threads = discover_local_ai_threads()
+    recent = [row for row in threads if milliseconds(row.get('updatedAt')) >= since_ms]
+    candidates = []
+    # Read one thread at a time so the existing report batch cap cannot truncate.
+    for row in recent:
+        logs = _read_task_sync_window([row], since_ms, until_ms)
+        if logs:
+            candidates.append(row)
+    return {'available': True, 'threads': candidates,
+            'managerThreads': [row for row in threads if not is_claude(row['id'])],
+            'since': since_ms, 'until': until_ms}
+
+
 def save_task_sync_settings(
     source_refs: list[str] | None = None,
     manager_thread_id: str | None = None,
@@ -1823,10 +1846,11 @@ def background_codex_statuses(
         grouped.setdefault(ref.get("hostId") or "local", []).append(ref)
     statuses: list[dict[str, Any]] = []
     for host_refs in grouped.values():
-        try:
-            statuses.extend(codex_statuses(host_refs))
-        except Exception:
-            continue
+        for offset in range(0, len(host_refs), MAX_REPORT_THREADS):
+            try:
+                statuses.extend(codex_statuses(host_refs[offset:offset + MAX_REPORT_THREADS]))
+            except Exception:
+                continue
     return statuses
 
 
@@ -2210,6 +2234,17 @@ class ReminderHandler(http.server.SimpleHTTPRequestHandler):
                 )
             return
 
+        if parsed.path == "/api/task-sync/candidates":
+            try:
+                since = self._query_timestamp(parsed, 'since')
+                until = self._query_timestamp(parsed, 'until') or time.time()
+                if since is None or since < 0 or since > until:
+                    raise ValueError('请选择有效的同步时间范围')
+                self._json_response(task_sync_candidates(int(since * 1000), int(until * 1000)))
+            except Exception as error:
+                self._json_response({'available': False, 'error': str(error)}, 400)
+            return
+
         if parsed.path in {"/api/task-sync/run", "/api/task-sync/request"}:
             try:
                 query = urllib.parse.parse_qs(parsed.query)
@@ -2436,6 +2471,7 @@ def main() -> None:
         notifier=get_feishu_notifier(),
         poll_interval=2,
     )
+    background_events.discovery = AIDiscovery(discover_local_ai_threads)
     background_events.start()
     widget_thread.start()
     threading.Timer(0.5, lambda: webbrowser.open(url)).start()
