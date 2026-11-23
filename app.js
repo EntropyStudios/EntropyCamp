@@ -4213,6 +4213,14 @@ function shortCwd(cwd) {
   return value ? value.split("/").filter(Boolean).slice(-2).join("/") : "";
 }
 
+function aiProvider(identifier = "") {
+  return identifier.startsWith("deepseek-") ? "deepseek" : identifier.startsWith("claude-") ? "claude" : "codex";
+}
+
+function aiProviderLabel(identifier) {
+  return {codex: "Codex", claude: "Claude Code", deepseek: "DeepSeek"}[aiProvider(identifier)];
+}
+
 function bubbleMarkup(card, now = Date.now(), modelKeys = new Map()) {
   const state = graphState(card, now);
   const linked = Boolean(card.codexThreadId);
@@ -4223,7 +4231,7 @@ function bubbleMarkup(card, now = Date.now(), modelKeys = new Map()) {
   const phaseStart = card.codexActivityStartedAt || (due ? card.codexLatestCompletedAt : null);
   const runtime = formatElapsedSince(phaseStart, now);
   const cardActionable = workSession.active && (due || state === "idle");
-  const hostLabel = card.codexHost && card.codexHost !== "local" ? "SSH" : card.codexThreadId?.startsWith("claude-") ? "Claude Code" : "Codex";
+  const hostLabel = card.codexHost && card.codexHost !== "local" ? "SSH" : aiProviderLabel(card.codexThreadId);
   const effort = isGraphThreadActive(card) ? reasoningEffortLabel(card.codexReasoningEffort) : "";
   const statusText = linked
     ? due ? "有新回复" : state === "processing" ? "处理中" : "保持关注"
@@ -4252,8 +4260,8 @@ function reminderCardMarkup(card, now, { focus = false, compact = false } = {}) 
   const linked = Boolean(card.codexThreadId);
   const due = state === "due";
   const actionable = workSession.active && (due || rawState === "idle");
-  const provider = linked ? (card.codexThreadId.startsWith("claude-") ? "claude" : "codex") : "timer";
-  const hostLabel = card.codexHost && card.codexHost !== "local" ? "SSH" : provider === "claude" ? "Claude Code" : "Codex";
+  const provider = linked ? aiProvider(card.codexThreadId) : "timer";
+  const hostLabel = card.codexHost && card.codexHost !== "local" ? "SSH" : aiProviderLabel(card.codexThreadId);
   const phaseStartedAt = Number(card.codexActivityStartedAt) || null;
   const runtime = formatElapsedSince(phaseStartedAt, now);
   const stateClass = due ? "due" : linked ? (rawState === "codex-paused" ? "paused" : "codex") : rawState;
@@ -4866,13 +4874,13 @@ function populateCodexSelect(selectedId = "", selectedHost = "local") {
   const providerSelect = document.querySelector("#aiProvider");
   // Editing an existing card always reveals its selected local conversation.
   if (selectedThreadRef.threadId && selectedThreadRef.hostId === "local") {
-    const selectedProvider = selectedThreadRef.threadId.startsWith("claude-") ? "claude" : "codex";
+    const selectedProvider = aiProvider(selectedThreadRef.threadId);
     if (providerSelect.value !== "all" && providerSelect.value !== selectedProvider) providerSelect.value = selectedProvider;
   }
   const provider = providerSelect.value;
   const options = [...knownThread, ...codexThreads].filter((thread) =>
     (!thread.hostId || thread.hostId === "local") &&
-    (provider === "all" || (thread.id.startsWith("claude-") ? "claude" : "codex") === provider));
+    (provider === "all" || aiProvider(thread.id) === provider));
   select.innerHTML = `<option value="">不关联</option>${options
     .map((thread) => {
       const ref = codexThreadRef(thread.hostId, thread.id);
@@ -4918,7 +4926,8 @@ async function loadCodexThreads() {
     codexAvailable = true;
     await applyCodexThreadNames(codexThreads);
     const claudeCount = codexThreads.filter((thread) => thread.id.startsWith("claude-")).length;
-    status.textContent = codexThreads.length ? `Codex ${codexThreads.length - claudeCount} 个 · Claude Code ${claudeCount} 个 · 仅本机` : "没有找到本机对话";
+    const deepseekCount = codexThreads.filter((thread) => thread.id.startsWith("deepseek-")).length;
+    status.textContent = codexThreads.length ? `Codex ${codexThreads.length - claudeCount - deepseekCount} 个 · Claude Code ${claudeCount} 个 · DeepSeek ${deepseekCount} 个 · 仅本机` : "没有找到本机对话";
   } catch {
     codexThreads = [];
     codexAvailable = false;
@@ -5044,7 +5053,7 @@ function linkedCodexThreadIds() {
 function refreshCodexEventStream() {
   const threadIds = [...new Set(
     cards
-      .filter((card) => !card.aiHidden && card.codexThreadId && card.codexHost === "local" && !card.codexThreadId.startsWith("claude-"))
+      .filter((card) => !card.aiHidden && card.codexThreadId && card.codexHost === "local" && aiProvider(card.codexThreadId) === "codex")
       .map((card) => card.codexThreadId),
   )].sort();
   const nextKey = threadIds.join("|");

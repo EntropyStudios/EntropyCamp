@@ -1373,11 +1373,12 @@
         </label>
 
         <label class="field codex-field">
-          <span>AI 对话 · Codex / Claude Code</span>
+          <span>AI 对话 · Codex / Claude Code / DeepSeek</span>
           <select id="aiProvider" aria-label="对话来源">
             <option value="all">全部本机 AI 对话</option>
             <option value="codex">Codex</option>
             <option value="claude">Claude Code</option>
+            <option value="deepseek">DeepSeek</option>
           </select>
           <select id="codexThread" aria-label="关联的 AI 对话" aria-describedby="codexStatus">
             <option value="">不关联</option>
@@ -1454,7 +1455,7 @@
           <legend>什么时候通知</legend>
           <label>
             <input type="checkbox" name="feishuEvent" value="codex_completed" checked />
-            <span><strong>AI 对话完成</strong><small>Codex / Claude Code 关联任务出现新的完整回复</small></span>
+            <span><strong>AI 对话完成</strong><small>Codex / Claude Code / DeepSeek 关联任务出现新的完整回复</small></span>
           </label>
           <label>
             <input type="checkbox" name="feishuEvent" value="work_ended" checked />

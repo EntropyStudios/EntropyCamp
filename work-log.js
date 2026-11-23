@@ -198,7 +198,7 @@ function renderThreadList() {
           <input data-report-card type="checkbox" value="${escapeHtml(card.id)}" ${checked} />
           <span>
             <strong>${escapeHtml(card.title || card.codexThreadName || "Codex 对话")}</strong>
-            <small>${card.codexThreadId.startsWith("claude-") ? "Claude Code · " : "Codex · "}${escapeHtml(card.codexThreadName || "AI 对话")} · 本班 ${count} 次</small>
+            <small>${card.codexThreadId.startsWith("deepseek-") ? "DeepSeek · " : card.codexThreadId.startsWith("claude-") ? "Claude Code · " : "Codex · "}${escapeHtml(card.codexThreadName || "AI 对话")} · 本班 ${count} 次</small>
           </span>
         </label>
       `;
@@ -234,7 +234,7 @@ function buildMarkdown(report, selected) {
     const card = selectedByThread.get(codexThreadRef(thread));
     lines.push(`## ${card?.title || thread.name || "Codex 对话"}`);
     lines.push("");
-    lines.push(`${thread.provider === "claude" ? "Claude Code" : "Codex"} 对话：${card?.codexThreadName || thread.name || "未命名对话"}`);
+    lines.push(`${thread.provider === "deepseek" ? "DeepSeek" : thread.provider === "claude" ? "Claude Code" : "Codex"} 对话：${card?.codexThreadName || thread.name || "未命名对话"}`);
     lines.push(`本班完成：${card ? workCountForCard(card) : 0} 次`);
     lines.push("");
     if (thread.error) {

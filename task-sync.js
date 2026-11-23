@@ -124,7 +124,7 @@
 
   function managerThread() {
     return managerThreads.find((thread) => thread.id === state?.managerThreadId)
-      || (state?.managerThreadId && !state.managerThreadId.startsWith("claude-") && !state.managerThreadId.includes("::") ? {id: state.managerThreadId, name: state.managerThreadName} : null)
+      || (state?.managerThreadId && !/^(claude|deepseek)-/.test(state.managerThreadId) && !state.managerThreadId.includes("::") ? {id: state.managerThreadId, name: state.managerThreadName} : null)
       || managerThreads[0]
       || null;
   }
@@ -143,7 +143,7 @@
   function visibleSourceThreads() {
     const query = sourceSearch.value.trim().toLocaleLowerCase();
     return sourceThreads.filter((thread) =>
-      (sourceProvider.value === "all" || (thread.id.startsWith("claude-") ? "claude" : "codex") === sourceProvider.value) &&
+      (sourceProvider.value === "all" || (thread.id.startsWith("deepseek-") ? "deepseek" : thread.id.startsWith("claude-") ? "claude" : "codex") === sourceProvider.value) &&
       `${thread.name || ""} ${thread.preview || ""} ${thread.sourceLabel || ""} ${thread.cwd || ""}`.toLocaleLowerCase().includes(query));
   }
 

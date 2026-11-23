@@ -354,7 +354,7 @@ def analysis_prompt(bundle_path: Path, window_start: int, window_end: int) -> st
 
 请完整读取本地文件：{bundle_path}
 时间窗口（毫秒时间戳）：{window_start} 至 {window_end}。
-来源包含本机 Codex 与 Claude Code；按 threads 中的 provider 区分，均为用户选中的原始对话记录。
+来源包含本机 Codex、Claude Code 与 DeepSeek Harness；按 threads 中的 provider 区分，均为用户选中的原始对话记录。
 
 目标：
 1. 按对话和时间顺序识别已经明确对应 Linear issue 的工作推进，建议是否应追加评论。
